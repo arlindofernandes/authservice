@@ -30,8 +30,6 @@ public class JwtService {
     }
 
     public String generateToken(User user) {
-        System.out.println("SECRET: " + jwtProperties.getSecret());
-        System.out.println("EXP: " + jwtProperties.getExpiration());
         var rolesList = user.getRoles();
 
         List<String> roles = rolesList

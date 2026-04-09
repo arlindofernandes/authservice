@@ -39,5 +39,6 @@ CREATE TABLE refresh_token (
     user_id UUID NOT NULL,
     expiry_date TIMESTAMP NOT NULL,
     revoked BOOLEAN DEFAULT FALSE,
+    used BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

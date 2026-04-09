@@ -27,13 +27,15 @@ public class RefreshTokenService {
         token.setToken(UUID.randomUUID().toString());
         token.setExpiryDate(
                 Instant.now().plus(7, ChronoUnit.DAYS));
+        token.setRevoked(false);
+        token.setUsed(false);
 
         return repository.save(token);
     }
 
     public RefreshToken verifyExpiration(RefreshToken token) {
 
-        if (token.getExpiryDate().compareTo(Instant.now()) < 0) {
+        if (token.getExpiryDate().isBefore(Instant.now())) {
 
             repository.delete(token);
 
@@ -43,16 +45,43 @@ public class RefreshTokenService {
         return token;
     }
 
-    public User validateRefreshToken(String refreshToken) {
+    public RefreshToken validateAndRotate(String refreshToken) {
 
         RefreshToken token = repository
                 .findByToken(refreshToken)
                 .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
 
+        if (token.isUsed() || token.isRevoked()) {
+
+            revokeAllUserTokens(token.getUser());
+
+            throw new RuntimeException("Refresh token reuse detected");
+        }
+
         verifyExpiration(token);
 
-        return token.getUser();
+        token.setUsed(true);
+        token.setRevoked(true);
+        repository.save(token);
 
+        return token;
+
+    }
+
+    public RefreshToken rotateToken(RefreshToken oldToken) {
+        return createRefreshToken(oldToken.getUser());
+    }
+
+    public void revokeAllUserTokens(User user) {
+
+        var tokens = repository.findAllByUserAndRevokedFalse(user);
+
+        tokens.forEach(t -> {
+            t.setUsed(true);
+            t.setRevoked(true);
+        });
+
+        repository.saveAll(tokens);
     }
 
 }

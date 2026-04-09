@@ -102,16 +102,23 @@ public class AuthService {
 
         public AuthResponse refreshToken(RefreshRequest request) {
 
-                User user = refreshTokenService.validateRefreshToken(
-                                request.getRefreshToken());
+                // 🔥 valida + marca como usado
+                RefreshToken oldToken = refreshTokenService
+                        .validateAndRotate(request.getRefreshToken());
 
-                String accessToken = jwtService.generateToken(user);
+                // 🔥 cria novo refresh token
+                RefreshToken newToken = refreshTokenService
+                        .createRefreshToken(oldToken.getUser());
+
+                // 🔥 gera novo access token
+                String accessToken = jwtService
+                        .generateToken(oldToken.getUser());
 
                 return new AuthResponse(
-                                accessToken,
-                                request.getRefreshToken(),
-                                "Bearer",
-                                expiration);
+                        accessToken,
+                        newToken.getToken(),
+                        "Bearer",
+                        expiration);
         }
 
         public void logout(HttpServletRequest request) {
