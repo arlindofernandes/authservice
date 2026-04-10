@@ -29,6 +29,7 @@ public class RefreshTokenService {
                 Instant.now().plus(7, ChronoUnit.DAYS));
         token.setRevoked(false);
         token.setUsed(false);
+        token.setTenantId(user.getTenantId());
 
         return repository.save(token);
     }

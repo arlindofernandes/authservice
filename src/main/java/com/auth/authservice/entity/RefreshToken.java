@@ -3,10 +3,7 @@ package com.auth.authservice.entity;
 import java.time.Instant;
 import java.util.UUID;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -25,6 +22,9 @@ public class RefreshToken {
     private boolean revoked;
 
     private boolean used;
+
+    @Column(nullable = false)
+    private UUID tenantId;
 
     @ManyToOne
     private User user;

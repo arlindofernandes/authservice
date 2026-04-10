@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import com.auth.authservice.entity.User;
 import com.auth.authservice.repository.UserRepository;
 
+import java.util.UUID;
+
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
         private final UserRepository userRepository;
@@ -21,8 +23,9 @@ public class CustomUserDetailsService implements UserDetailsService {
         public UserDetails loadUserByUsername(String email)
                         throws UsernameNotFoundException {
 
+                UUID tenantId = TenantContext.get();
                 User user = userRepository
-                                .findByEmail(email)
+                                .findByEmailAndTenantId(email,tenantId)
                                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
                 return org.springframework.security.core.userdetails.User

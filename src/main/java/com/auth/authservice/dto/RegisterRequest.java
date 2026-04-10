@@ -13,6 +13,13 @@ public class RegisterRequest {
     @Size(min = 6, message = "Password must be at least 6 characters long")
     private String password;
 
+    @NotBlank
+    private String tenantName;
+
+    public String getTenantName() {
+        return tenantName;
+    }
+
     public String getEmail() {
         return email;
     }

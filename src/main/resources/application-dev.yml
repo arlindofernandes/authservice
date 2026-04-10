@@ -1,13 +1,13 @@
 spring:
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/authdb}
+    username: ${DB_USER:auth}
+    password: ${DB_PASSWORD:auth}
 
   data:
     redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
   jpa:
     hibernate:
@@ -15,5 +15,5 @@ spring:
     show-sql: true
 
 jwt:
-  secret: ${JWT_SECRET}
-  expiration: ${JWT_EXPIRATION}
+  secret: ${JWT_SECRET:27YptbdYXI75gMxTSGIjja1H5yX5b4HdFWgUOItNLzs=}
+  expiration: ${JWT_EXPIRATION:900000}

@@ -1,6 +1,7 @@
 package com.auth.authservice.security;
 
 import java.io.IOException;
+import java.util.UUID;
 
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -58,36 +59,42 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-
         try {
-            email = jwtService.extractEmail(jwt);
-        } catch (Exception e) {
-            filterChain.doFilter(request, response);
-            return;
-        }
 
-        if (email != null &&
-                SecurityContextHolder.getContext().getAuthentication() == null) {
-
-            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-
-            if (jwtService.isTokenValid(jwt, userDetails)) {
-
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.getAuthorities());
-
-                authToken.setDetails(
-                        new WebAuthenticationDetailsSource()
-                                .buildDetails(request));
-
-                SecurityContextHolder
-                        .getContext()
-                        .setAuthentication(authToken);
+            try {
+                email = jwtService.extractEmail(jwt);
+            } catch (Exception e) {
+                filterChain.doFilter(request, response);
+                return;
             }
-        }
+            UUID tenantId = jwtService.extractTenantId(jwt);
+            TenantContext.set(tenantId);
 
-        filterChain.doFilter(request, response);
+            if (email != null &&
+                    SecurityContextHolder.getContext().getAuthentication() == null) {
+
+                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+
+                if (jwtService.isTokenValid(jwt, userDetails)) {
+
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails,
+                            null,
+                            userDetails.getAuthorities());
+
+                    authToken.setDetails(
+                            new WebAuthenticationDetailsSource()
+                                    .buildDetails(request));
+
+                    SecurityContextHolder
+                            .getContext()
+                            .setAuthentication(authToken);
+                }
+            }
+
+            filterChain.doFilter(request, response);
+        } finally {
+            TenantContext.clear();
+        }
     }
 }

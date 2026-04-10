@@ -3,6 +3,8 @@ package com.auth.authservice.service;
 import java.security.Key;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.Function;
 
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,7 @@ public class JwtService {
 
         return Jwts.builder()
                 .setSubject(user.getEmail())
+                .claim("tenantId",user.getTenantId().toString())
                 .claim("roles", roles)
                 .claim("permissions", permissions)
                 .setIssuedAt(new Date())
@@ -90,5 +93,16 @@ public class JwtService {
         Date expiration = extractAllClaims(token).getExpiration();
 
         return expiration.getTime() - System.currentTimeMillis();
+    }
+
+    public UUID extractTenantId(String token) {
+        return UUID.fromString(
+                extractClaim(token, claims -> claims.get("tenantId", String.class))
+        );
+    }
+
+    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = extractAllClaims(token);
+        return claimsResolver.apply(claims);
     }
 }
