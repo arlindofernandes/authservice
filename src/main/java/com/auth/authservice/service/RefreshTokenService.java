@@ -6,9 +6,12 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.auth.authservice.entity.MembershipApplication;
 import com.auth.authservice.entity.RefreshToken;
-import com.auth.authservice.entity.User;
 import com.auth.authservice.repository.RefreshTokenRepository;
+
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class RefreshTokenService {
@@ -19,70 +22,76 @@ public class RefreshTokenService {
         this.repository = repository;
     }
 
-    public RefreshToken createRefreshToken(User user) {
+    @Transactional
+    public RefreshToken createRefreshToken(MembershipApplication membershipApplication) {
 
         RefreshToken token = new RefreshToken();
 
-        token.setUser(user);
+        token.setMembershipApplication(membershipApplication);
         token.setToken(UUID.randomUUID().toString());
-        token.setExpiryDate(
-                Instant.now().plus(7, ChronoUnit.DAYS));
+        token.setExpiryDate(Instant.now().plus(7, ChronoUnit.DAYS));
         token.setRevoked(false);
         token.setUsed(false);
-        token.setTenantId(user.getTenantId());
 
         return repository.save(token);
     }
 
+    @Transactional(noRollbackFor = InvalidRefreshTokenException.class)
     public RefreshToken verifyExpiration(RefreshToken token) {
 
         if (token.getExpiryDate().isBefore(Instant.now())) {
 
             repository.delete(token);
 
-            throw new RuntimeException("Refresh token expired");
+            throw new InvalidRefreshTokenException();
         }
 
         return token;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = {
+            RefreshTokenReuseException.class,
+            InvalidRefreshTokenException.class
+    })
     public RefreshToken validateAndRotate(String refreshToken) {
 
         RefreshToken token = repository
                 .findByToken(refreshToken)
-                .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
+                .orElseThrow(InvalidRefreshTokenException::new);
+
+        MembershipApplication membershipApplication = token.getMembershipApplication();
 
         if (token.isUsed() || token.isRevoked()) {
 
-            revokeAllUserTokens(token.getUser());
+            revokeAllMembershipApplicationTokens(membershipApplication);
 
-            throw new RuntimeException("Refresh token reuse detected");
+            throw new RefreshTokenReuseException();
         }
 
         verifyExpiration(token);
 
         token.setUsed(true);
         token.setRevoked(true);
-        repository.save(token);
 
-        return token;
-
+        return repository.save(token);
     }
 
     public RefreshToken rotateToken(RefreshToken oldToken) {
-        return createRefreshToken(oldToken.getUser());
+        return createRefreshToken(oldToken.getMembershipApplication());
     }
 
-    public void revokeAllUserTokens(User user) {
+    @Transactional
+    public void revokeAllMembershipApplicationTokens(
+            MembershipApplication membershipApplication) {
 
-        var tokens = repository.findAllByUserAndRevokedFalse(user);
+        var tokens = repository
+                .findAllByMembershipApplicationAndRevokedFalse(membershipApplication);
 
-        tokens.forEach(t -> {
-            t.setUsed(true);
-            t.setRevoked(true);
+        tokens.forEach(token -> {
+            token.setUsed(true);
+            token.setRevoked(true);
         });
 
         repository.saveAll(tokens);
     }
-
 }

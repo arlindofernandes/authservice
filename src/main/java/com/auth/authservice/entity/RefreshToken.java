@@ -10,22 +10,28 @@ import lombok.Setter;
 @Entity
 @Setter
 @Getter
+@Table(name = "refresh_token")
 public class RefreshToken {
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Column(nullable = false, unique = true, length = 512)
     private String token;
 
+    @Column(name = "expiry_date", nullable = false)
     private Instant expiryDate;
 
-    private boolean revoked;
-
-    private boolean used;
+    @Column(nullable = false)
+    private boolean revoked = false;
 
     @Column(nullable = false)
-    private UUID tenantId;
+    private boolean used = false;
 
-    @ManyToOne
-    private User user;
+    @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+    private Instant createdAt;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "membership_application_id", nullable = false)
+    private MembershipApplication membershipApplication;
 }

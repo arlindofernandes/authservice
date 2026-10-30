@@ -1,101 +1,125 @@
 package com.auth.authservice.service;
 
+import java.util.Locale;
+
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.auth.authservice.dto.AuthResponse;
 import com.auth.authservice.dto.LoginRequest;
 import com.auth.authservice.dto.RefreshRequest;
-import com.auth.authservice.dto.RegisterRequest;
+import com.auth.authservice.entity.Application;
+import com.auth.authservice.entity.MembershipApplication;
 import com.auth.authservice.entity.RefreshToken;
-import com.auth.authservice.entity.Role;
 import com.auth.authservice.entity.Tenant;
+import com.auth.authservice.entity.TenantApplication;
+import com.auth.authservice.entity.TenantMembership;
 import com.auth.authservice.entity.User;
-import com.auth.authservice.repository.RoleRepository;
+import com.auth.authservice.repository.ApplicationRepository;
+import com.auth.authservice.repository.MembershipApplicationRepository;
+import com.auth.authservice.repository.TenantApplicationRepository;
+import com.auth.authservice.repository.TenantMembershipRepository;
 import com.auth.authservice.repository.TenantRepository;
-import com.auth.authservice.repository.UserRepository;
-import com.auth.authservice.security.TenantContext;
-import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
 
-import java.util.Set;
+import jakarta.servlet.http.HttpServletRequest;
 
 @Service
 public class AuthService {
 
-    private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final TokenBlacklistService tokenBlacklistService;
+
     private final TenantRepository tenantRepository;
-    private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
+    private final ApplicationRepository applicationRepository;
+    private final TenantApplicationRepository tenantApplicationRepository;
+    private final TenantMembershipRepository tenantMembershipRepository;
+    private final MembershipApplicationRepository membershipApplicationRepository;
+
     private final PasswordEncoder passwordEncoder;
-    long expiration;
 
-    public AuthService(AuthenticationManager authenticationManager,
-                       JwtService jwtService,
-                       RefreshTokenService refreshTokenService,
-                       TokenBlacklistService tokenBlacklistService,
-                       TenantRepository tenantRepository,
-                       UserRepository userRepository,
-                       RoleRepository roleRepository,
-                       PasswordEncoder passwordEncoder
+    private final long expiration;
 
-    ) {
-        this.authenticationManager = authenticationManager;
+    public AuthService(
+            JwtService jwtService,
+            RefreshTokenService refreshTokenService,
+            TokenBlacklistService tokenBlacklistService,
+            TenantRepository tenantRepository,
+            ApplicationRepository applicationRepository,
+            TenantApplicationRepository tenantApplicationRepository,
+            TenantMembershipRepository tenantMembershipRepository,
+            MembershipApplicationRepository membershipApplicationRepository,
+            PasswordEncoder passwordEncoder) {
+
         this.jwtService = jwtService;
-        this.tenantRepository = tenantRepository;
         this.refreshTokenService = refreshTokenService;
         this.tokenBlacklistService = tokenBlacklistService;
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
+        this.tenantRepository = tenantRepository;
+        this.applicationRepository = applicationRepository;
+        this.tenantApplicationRepository = tenantApplicationRepository;
+        this.tenantMembershipRepository = tenantMembershipRepository;
+        this.membershipApplicationRepository = membershipApplicationRepository;
         this.passwordEncoder = passwordEncoder;
 
-        expiration = jwtService.getExpiration() / 1000; // Convert to seconds
+        this.expiration = jwtService.getExpiration() / 1000;
     }
 
-    public AuthResponse register(RegisterRequest request) {
+    @Transactional
+    public AuthResponse login(LoginRequest request) {
 
-        String domain = request.getEmail().substring(request.getEmail().indexOf("@") + 1);
+        String email = request.getEmail()
+                .trim()
+                .toLowerCase(Locale.ROOT);
+
+        // 1. Localiza o tenant.
         Tenant tenant = tenantRepository
-                .findByName(request.getTenantName())
-                .orElse(null);
-        Role role;
-        if (tenant == null) {
-            //PRIMEIRO USUÁRIO É ADMIN → CRIA TENANT
-            tenant = new Tenant();
-            tenant.setName(request.getTenantName());
-            tenant.setDomain(domain);
-            tenantRepository.save(tenant);
-            role = roleRepository.findByName("ADMIN")
-                    .orElseThrow();
-        } else {
-            //VALIDAR DOMÍNIO DO EMAIL
-            String emailDomain = request.getEmail().split("@")[1];
+                .findBySlugAndActiveTrue(request.getTenantSlug())
+                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
-            if (!emailDomain.equalsIgnoreCase(tenant.getDomain())) {
-                throw new RuntimeException("Email domain not allowed");
-            }
-            //USUÁRIOS POSTERIORES → USER
-            role = roleRepository.findByName("USER")
-                    .orElseThrow();
+        // 2. Localiza a aplicação.
+        Application application = applicationRepository
+                .findByAppKeyAndActiveTrue(request.getAppKey())
+                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
+
+        // 3. Verifica se a aplicação está habilitada para o tenant.
+        tenantApplicationRepository
+                .findByTenantIdAndApplicationIdAndStatus(
+                        tenant.getId(),
+                        application.getId(),
+                        TenantApplication.Status.ACTIVE)
+                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
+
+        // 4. Localiza a associação do usuário com o tenant.
+        TenantMembership membership = tenantMembershipRepository
+                .findByUserEmailAndTenantSlugAndStatus(
+                        email,
+                        tenant.getSlug(),
+                        TenantMembership.Status.ACTIVE)
+                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
+
+        User user = membership.getUser();
+
+        // 5. Verifica usuário e senha.
+        if (!user.isEnabled()
+                || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new BadCredentialsException("Invalid credentials");
         }
-        if (userRepository.findByEmailAndTenantId(request.getEmail(), tenant.getId()).isPresent()) {
-            throw new RuntimeException("Email already registered in this tenant");
-        }
 
-        User user = new User();
-        user.setEmail(request.getEmail());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setTenantId(tenant.getId());
-        user.setRoles(Set.of(role));
+        // 6. Verifica se o usuário possui acesso à aplicação.
+        MembershipApplication membershipApplication = membershipApplicationRepository
+                .findByMembershipIdAndApplicationIdAndStatus(
+                        membership.getId(),
+                        application.getId(),
+                        MembershipApplication.Status.ACTIVE)
+                .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
-        userRepository.save(user);
+        // 7. Emite os tokens no contexto correto.
+        String accessToken = jwtService.generateToken(membershipApplication);
 
-        String accessToken = jwtService.generateToken(user);
-
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+        RefreshToken refreshToken = refreshTokenService
+                .createRefreshToken(membershipApplication);
 
         return new AuthResponse(
                 accessToken,
@@ -104,60 +128,44 @@ public class AuthService {
                 expiration);
     }
 
-    public AuthResponse login(LoginRequest request) {
-
-        // extrai domínio do email
-        String domain = request.getEmail()
-                .substring(request.getEmail().indexOf("@") + 1);
-        System.out.println(domain);
-        Tenant tenant = tenantRepository
-                .findByDomain(domain)
-                .orElseThrow(() -> new RuntimeException("Tenant not found"));
-
-        try {
-            TenantContext.set(tenant.getId());
-
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            request.getEmail(),
-                            request.getPassword()));
-            User user = userRepository
-                    .findByEmailAndTenantId(request.getEmail(), tenant.getId())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-
-
-            String accessToken = jwtService.generateToken(user);
-            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
-
-            return new AuthResponse(
-                    accessToken,
-                    refreshToken.getToken(),
-                    "Bearer",
-                    expiration);
-        } finally {
-            TenantContext.clear();
-        }
-    }
-
+    @Transactional
     public AuthResponse refreshToken(RefreshRequest request) {
 
-        // 🔥 valida + marca como usado
+        // Valida e invalida o refresh token anterior.
         RefreshToken oldToken = refreshTokenService
                 .validateAndRotate(request.getRefreshToken());
 
-        // 🔥 cria novo refresh token
-        RefreshToken newToken = refreshTokenService
-                .createRefreshToken(oldToken.getUser());
+        MembershipApplication membershipApplication = oldToken.getMembershipApplication();
 
-        // 🔥 gera novo access token
-        String accessToken = jwtService
-                .generateToken(oldToken.getUser());
+        // Confere se o acesso continua ativo.
+        validateMembershipApplication(membershipApplication);
+
+        // Emite os novos tokens no mesmo contexto.
+        String accessToken = jwtService.generateToken(membershipApplication);
+
+        RefreshToken newToken = refreshTokenService
+                .createRefreshToken(membershipApplication);
 
         return new AuthResponse(
                 accessToken,
                 newToken.getToken(),
                 "Bearer",
                 expiration);
+    }
+
+
+    private void validateMembershipApplication(
+            MembershipApplication membershipApplication) {
+
+        if (membershipApplication.getStatus() != MembershipApplication.Status.ACTIVE
+                || membershipApplication.getMembership().getStatus() != TenantMembership.Status.ACTIVE
+                || membershipApplication.getTenantApplication().getStatus() != TenantApplication.Status.ACTIVE
+                || !membershipApplication.getMembership().getTenant().isActive()
+                || !membershipApplication.getApplication().isActive()
+                || !membershipApplication.getMembership().getUser().isEnabled()) {
+
+            throw new BadCredentialsException("Invalid refresh token");
+        }
     }
 
     public void logout(HttpServletRequest request) {
@@ -170,9 +178,12 @@ public class AuthService {
 
         String token = authHeader.substring(7);
 
-        long remainingTime = jwtService.getRemainingTime(token);
+        try {
+            long remainingTime = jwtService.getRemainingTime(token);
 
-        tokenBlacklistService.blacklistToken(token, remainingTime);
+            tokenBlacklistService.blacklistToken(token, remainingTime);
+        } catch (Exception exception) {
+            // Token inválido ou expirado: não há necessidade de adicioná-lo à blacklist.
+        }
     }
-
 }

@@ -1,13 +1,13 @@
 package com.auth.authservice.security;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -24,15 +24,12 @@ import jakarta.servlet.http.HttpServletResponse;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
-    private final UserDetailsService userDetailsService;
     private final TokenBlacklistService tokenBlacklistService;
 
     public JwtAuthenticationFilter(
             JwtService jwtService,
-            UserDetailsService userDetailsService,
             TokenBlacklistService tokenBlacklistService) {
         this.jwtService = jwtService;
-        this.userDetailsService = userDetailsService;
         this.tokenBlacklistService = tokenBlacklistService;
     }
 
@@ -42,59 +39,59 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String email;
+        String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(7);
+        String jwt = authHeader.substring(7);
 
-        if (tokenBlacklistService.isBlacklisted(jwt)) {
-
-            filterChain.doFilter(request, response);
-            return;
-        }
         try {
-
-            try {
-                email = jwtService.extractEmail(jwt);
-            } catch (Exception e) {
+            if (tokenBlacklistService.isBlacklisted(jwt) || !jwtService.isTokenValid(jwt)) {
                 filterChain.doFilter(request, response);
                 return;
             }
+
+            UUID userId = jwtService.extractUserId(jwt);
             UUID tenantId = jwtService.extractTenantId(jwt);
-            TenantContext.set(tenantId);
+            String appKey = jwtService.extractAppKey(jwt);
 
-            if (email != null &&
-                    SecurityContextHolder.getContext().getAuthentication() == null) {
+            List<String> roles = jwtService.extractRoles(jwt);
+            List<String> permissions = jwtService.extractPermissions(jwt);
 
-                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            AuthPrincipal principal = new AuthPrincipal(userId, tenantId, appKey);
 
-                if (jwtService.isTokenValid(jwt, userDetails)) {
+            AuthContext.set(principal);
 
-                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                            userDetails,
-                            null,
-                            userDetails.getAuthorities());
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
 
-                    authToken.setDetails(
-                            new WebAuthenticationDetailsSource()
-                                    .buildDetails(request));
+                var authorities = permissions.stream()
+                        .map(SimpleGrantedAuthority::new)
+                        .toList();
 
-                    SecurityContextHolder
-                            .getContext()
-                            .setAuthentication(authToken);
-                }
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                principal,
+                                null,
+                                authorities);
+
+                authentication.setDetails(
+                        new WebAuthenticationDetailsSource().buildDetails(request));
+
+                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
 
             filterChain.doFilter(request, response);
+
+        } catch (Exception exception) {
+            SecurityContextHolder.clearContext();
+            response.sendError(
+                    HttpServletResponse.SC_UNAUTHORIZED,
+                    "Invalid or expired token");
         } finally {
-            TenantContext.clear();
+            AuthContext.clear();
         }
     }
 }

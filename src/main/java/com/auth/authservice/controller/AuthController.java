@@ -8,11 +8,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.auth.authservice.dto.AuthResponse;
 import com.auth.authservice.dto.LoginRequest;
 import com.auth.authservice.dto.RefreshRequest;
-import com.auth.authservice.dto.RegisterRequest;
 import com.auth.authservice.service.AuthService;
 
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/auth")
@@ -22,13 +20,6 @@ public class AuthController {
 
     public AuthController(AuthService authService) {
         this.authService = authService;
-    }
-
-    @PostMapping("/register")
-    public AuthResponse register(
-            @Valid @RequestBody RegisterRequest request) {
-
-        return authService.register(request);
     }
 
     @PostMapping("/login")
@@ -47,6 +38,5 @@ public class AuthController {
     public void logout(HttpServletRequest request) {
         authService.logout(request);
     }
-
 
 }

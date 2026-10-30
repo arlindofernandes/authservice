@@ -11,8 +11,9 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
+    open-in-view: false
 
 jwt:
   secret: ${JWT_SECRET:27YptbdYXI75gMxTSGIjja1H5yX5b4HdFWgUOItNLzs=}

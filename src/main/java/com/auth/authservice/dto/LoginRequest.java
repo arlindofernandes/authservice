@@ -8,11 +8,15 @@ import lombok.Setter;
 @Setter
 public class LoginRequest {
     @NotBlank
+    private String tenantSlug;
+
+    @NotBlank
+    private String appKey;
+
+    @NotBlank
     private String email;
 
     @NotBlank
     private String password;
-
-
 
 }

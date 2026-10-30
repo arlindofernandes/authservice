@@ -11,8 +11,8 @@ import com.auth.authservice.entity.User;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
 
-    Optional<User> findByEmail(String email);
+  Optional<User> findByEmail(String email);
 
-    Optional<User> findByEmailAndTenantId(String email, UUID tenantId);
+    boolean existsByEmail(String email);
 
 }
