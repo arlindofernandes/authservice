@@ -18,3 +18,5 @@ spring:
 jwt:
   secret: ${JWT_SECRET:27YptbdYXI75gMxTSGIjja1H5yX5b4HdFWgUOItNLzs=}
   expiration: ${JWT_EXPIRATION:900000}
+  client-secret: ${CLIENT_JWT_SECRET:V1JzQ0h4aE5zYVd0QmF4Q2Z1cE1zR2p4a1d5bE9yTnV6S0h4cA==}
+  client-expiration: ${CLIENT_JWT_EXPIRATION:300000}

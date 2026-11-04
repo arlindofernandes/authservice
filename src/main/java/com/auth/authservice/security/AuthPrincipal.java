@@ -5,6 +5,7 @@ import java.util.UUID;
 public record AuthPrincipal(
         UUID userId,
         UUID tenantId,
-        String appKey
+        String appKey,
+        UUID sessionId
 ) {
 }

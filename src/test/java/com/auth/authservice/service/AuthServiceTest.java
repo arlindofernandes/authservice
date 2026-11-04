@@ -2,6 +2,9 @@
 package com.auth.authservice.service;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 import java.util.Optional;
@@ -10,6 +13,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -33,353 +37,364 @@ import com.auth.authservice.repository.TenantRepository;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
-    @Mock
-    private JwtService jwtService;
-
-    @Mock
-    private RefreshTokenService refreshTokenService;
-
-    @Mock
-    private TokenBlacklistService tokenBlacklistService;
-
-    @Mock
-    private TenantRepository tenantRepository;
-
-    @Mock
-    private ApplicationRepository applicationRepository;
-
-    @Mock
-    private TenantApplicationRepository tenantApplicationRepository;
-
-    @Mock
-    private TenantMembershipRepository tenantMembershipRepository;
-
-    @Mock
-    private MembershipApplicationRepository membershipApplicationRepository;
-
-    @Mock
-    private PasswordEncoder passwordEncoder;
-
-    private AuthService authService;
-
-    private Tenant tenant;
-    private Application application;
-    private User user;
-    private TenantMembership membership;
-    private MembershipApplication membershipApplication;
-
-    private final String email = "user@example.com";
-    private final String password = "password123";
-    private final String tenantSlug = "example";
-    private final String appKey = "tempora";
-
-    @BeforeEach
-    void setUp() {
-
-        when(jwtService.getExpiration()).thenReturn(900000L);
-
-        authService = new AuthService(
-                jwtService,
-                refreshTokenService,
-                tokenBlacklistService,
-                tenantRepository,
-                applicationRepository,
-                tenantApplicationRepository,
-                tenantMembershipRepository,
-                membershipApplicationRepository,
-                passwordEncoder);
-
-        tenant = new Tenant();
-        tenant.setId(UUID.randomUUID());
-        tenant.setName("Example");
-        tenant.setSlug(tenantSlug);
-        tenant.setActive(true);
-
-        application = new Application();
-        application.setId(UUID.randomUUID());
-        application.setAppKey(appKey);
-        application.setName("Tempora");
-        application.setActive(true);
-
-        user = new User();
-        user.setId(UUID.randomUUID());
-        user.setName("Example User");
-        user.setEmail(email);
-        user.setPassword("encoded-password");
-        user.setEnabled(true);
-
-        membership = new TenantMembership();
-        membership.setId(UUID.randomUUID());
-        membership.setUser(user);
-        membership.setTenant(tenant);
-        membership.setStatus(TenantMembership.Status.ACTIVE);
-
-        membershipApplication = new MembershipApplication();
-        membershipApplication.setId(UUID.randomUUID());
-        membershipApplication.setTenantId(tenant.getId());
-        membershipApplication.setApplication(application);
-        membershipApplication.setMembership(membership);
-        membershipApplication.setStatus(MembershipApplication.Status.ACTIVE);
-    }
-
-    private LoginRequest validRequest() {
-
-        LoginRequest request = new LoginRequest();
-        request.setTenantSlug(tenantSlug);
-        request.setAppKey(appKey);
-        request.setEmail(email);
-        request.setPassword(password);
-
-        return request;
-    }
-
-    private void mockValidContext() {
+        @Mock
+        private JwtService jwtService;
+
+        @Mock
+        private RefreshTokenService refreshTokenService;
+
+        @Mock
+        private TokenBlacklistService tokenBlacklistService;
+
+        @Mock
+        private TenantRepository tenantRepository;
+
+        @Mock
+        private ApplicationRepository applicationRepository;
+
+        @Mock
+        private TenantApplicationRepository tenantApplicationRepository;
+
+        @Mock
+        private TenantMembershipRepository tenantMembershipRepository;
+
+        @Mock
+        private MembershipApplicationRepository membershipApplicationRepository;
+
+        @Mock
+        private PasswordEncoder passwordEncoder;
+
+        private AuthService authService;
+
+        private Tenant tenant;
+        private Application application;
+        private User user;
+        private TenantMembership membership;
+        private MembershipApplication membershipApplication;
+
+        private final String email = "user@example.com";
+        private final String password = "password123";
+        private final String tenantSlug = "example";
+        private final String appKey = "tempora";
+
+        @BeforeEach
+        void setUp() {
+
+                when(jwtService.getExpiration()).thenReturn(900000L);
+
+                authService = new AuthService(
+                                jwtService,
+                                refreshTokenService,
+                                tokenBlacklistService,
+                                tenantRepository,
+                                applicationRepository,
+                                tenantApplicationRepository,
+                                tenantMembershipRepository,
+                                membershipApplicationRepository,
+                                passwordEncoder);
+
+                tenant = new Tenant();
+                tenant.setId(UUID.randomUUID());
+                tenant.setName("Example");
+                tenant.setSlug(tenantSlug);
+                tenant.setActive(true);
+
+                application = new Application();
+                application.setId(UUID.randomUUID());
+                application.setAppKey(appKey);
+                application.setName("Tempora");
+                application.setActive(true);
+
+                user = new User();
+                user.setId(UUID.randomUUID());
+                user.setName("Example User");
+                user.setEmail(email);
+                user.setPassword("encoded-password");
+                user.setEnabled(true);
+
+                membership = new TenantMembership();
+                membership.setId(UUID.randomUUID());
+                membership.setUser(user);
+                membership.setTenant(tenant);
+                membership.setStatus(TenantMembership.Status.ACTIVE);
+
+                membershipApplication = new MembershipApplication();
+                membershipApplication.setId(UUID.randomUUID());
+                membershipApplication.setTenantId(tenant.getId());
+                membershipApplication.setApplication(application);
+                membershipApplication.setMembership(membership);
+                membershipApplication.setStatus(MembershipApplication.Status.ACTIVE);
+        }
+
+        private LoginRequest validRequest() {
+
+                LoginRequest request = new LoginRequest();
+                request.setTenantSlug(tenantSlug);
+                request.setAppKey(appKey);
+                request.setEmail(email);
+                request.setPassword(password);
+
+                return request;
+        }
+
+        private void mockValidContext() {
 
-        when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
-                .thenReturn(Optional.of(tenant));
+                when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
+                                .thenReturn(Optional.of(tenant));
 
-        when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
-                .thenReturn(Optional.of(application));
+                when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
+                                .thenReturn(Optional.of(application));
 
-        TenantApplication tenantApplication = new TenantApplication();
-        tenantApplication.setId(UUID.randomUUID());
-        tenantApplication.setTenant(tenant);
-        tenantApplication.setApplication(application);
-        tenantApplication.setStatus(TenantApplication.Status.ACTIVE);
+                TenantApplication tenantApplication = new TenantApplication();
+                tenantApplication.setId(UUID.randomUUID());
+                tenantApplication.setTenant(tenant);
+                tenantApplication.setApplication(application);
+                tenantApplication.setStatus(TenantApplication.Status.ACTIVE);
 
-        when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
-                tenant.getId(),
-                application.getId(),
-                TenantApplication.Status.ACTIVE))
-                .thenReturn(Optional.of(tenantApplication));
+                when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
+                                tenant.getId(),
+                                application.getId(),
+                                TenantApplication.Status.ACTIVE))
+                                .thenReturn(Optional.of(tenantApplication));
 
-        when(tenantMembershipRepository.findByUserEmailAndTenantSlugAndStatus(
-                email,
-                tenantSlug,
-                TenantMembership.Status.ACTIVE))
-                .thenReturn(Optional.of(membership));
+                when(tenantMembershipRepository.findByUserEmailAndTenantSlugAndStatus(
+                                email,
+                                tenantSlug,
+                                TenantMembership.Status.ACTIVE))
+                                .thenReturn(Optional.of(membership));
 
-        when(passwordEncoder.matches(password, user.getPassword()))
-                .thenReturn(true);
+                when(passwordEncoder.matches(password, user.getPassword()))
+                                .thenReturn(true);
 
-        when(membershipApplicationRepository.findByMembershipIdAndApplicationIdAndStatus(
-                membership.getId(),
-                application.getId(),
-                MembershipApplication.Status.ACTIVE))
-                .thenReturn(Optional.of(membershipApplication));
-    }
+                when(membershipApplicationRepository.findByMembershipIdAndApplicationIdAndStatus(
+                                membership.getId(),
+                                application.getId(),
+                                MembershipApplication.Status.ACTIVE))
+                                .thenReturn(Optional.of(membershipApplication));
+        }
 
-    @Test
-    void shouldLoginSuccessfully() {
+        @Test
+        void shouldLoginSuccessfully() {
 
-        mockValidContext();
+                mockValidContext();
 
-        RefreshToken refreshToken = new RefreshToken();
-        refreshToken.setToken("refresh-token");
+                RefreshToken refreshToken = new RefreshToken();
+                refreshToken.setToken("refresh-token");
 
-        when(jwtService.generateToken(membershipApplication))
-                .thenReturn("access-token");
+                when(jwtService.generateToken(
+                                eq(membershipApplication),
+                                any(UUID.class)))
+                                .thenReturn("access-token");
 
-        when(refreshTokenService.createRefreshToken(membershipApplication))
-                .thenReturn(refreshToken);
+                when(refreshTokenService.createRefreshToken(
+                                eq(membershipApplication),
+                                any(UUID.class)))
+                                .thenReturn(refreshToken);
 
-        AuthResponse response = authService.login(validRequest());
+                AuthResponse response = authService.login(validRequest());
 
-        assertNotNull(response);
-        assertEquals("access-token", response.getAccessToken());
-        assertEquals("refresh-token", response.getRefreshToken());
-        assertEquals("Bearer", response.getTokenType());
-        assertEquals(900L, response.getExpiresIn());
+                assertNotNull(response);
+                assertEquals("access-token", response.getAccessToken());
+                assertEquals("refresh-token", response.getRefreshToken());
+                assertEquals("Bearer", response.getTokenType());
+                assertEquals(900L, response.getExpiresIn());
 
-        verify(jwtService).generateToken(membershipApplication);
-        verify(refreshTokenService).createRefreshToken(membershipApplication);
-    }
+                ArgumentCaptor<UUID> sessionIdCaptor = ArgumentCaptor.forClass(UUID.class);
 
-    @Test
-    void shouldRejectLoginWhenTenantDoesNotExist() {
+                verify(jwtService).generateToken(
+                                eq(membershipApplication),
+                                sessionIdCaptor.capture());
 
-        when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
-                .thenReturn(Optional.empty());
+                verify(refreshTokenService).createRefreshToken(
+                                eq(membershipApplication),
+                                eq(sessionIdCaptor.getValue()));
+        }
 
-        assertThrows(
-                BadCredentialsException.class,
-                () -> authService.login(validRequest()));
+        @Test
+        void shouldRejectLoginWhenTenantDoesNotExist() {
 
-        verify(applicationRepository, never())
-                .findByAppKeyAndActiveTrue(anyString());
-    }
+                when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
+                                .thenReturn(Optional.empty());
 
-    @Test
-    void shouldRejectLoginWhenApplicationDoesNotExist() {
+                assertThrows(
+                                BadCredentialsException.class,
+                                () -> authService.login(validRequest()));
 
-        when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
-                .thenReturn(Optional.of(tenant));
+                verify(applicationRepository, never())
+                                .findByAppKeyAndActiveTrue(anyString());
+        }
 
-        when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
-                .thenReturn(Optional.empty());
+        @Test
+        void shouldRejectLoginWhenApplicationDoesNotExist() {
 
-        assertThrows(
-                BadCredentialsException.class,
-                () -> authService.login(validRequest()));
+                when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
+                                .thenReturn(Optional.of(tenant));
 
-        verify(tenantApplicationRepository, never())
-                .findByTenantIdAndApplicationIdAndStatus(
-                        any(), any(), any());
-    }
+                when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
+                                .thenReturn(Optional.empty());
 
-    @Test
-    void shouldRejectLoginWhenApplicationIsNotEnabledForTenant() {
+                assertThrows(
+                                BadCredentialsException.class,
+                                () -> authService.login(validRequest()));
 
-        when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
-                .thenReturn(Optional.of(tenant));
+                verify(tenantApplicationRepository, never())
+                                .findByTenantIdAndApplicationIdAndStatus(
+                                                any(), any(), any());
+        }
 
-        when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
-                .thenReturn(Optional.of(application));
+        @Test
+        void shouldRejectLoginWhenApplicationIsNotEnabledForTenant() {
 
-        when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
-                tenant.getId(),
-                application.getId(),
-                TenantApplication.Status.ACTIVE))
-                .thenReturn(Optional.empty());
+                when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
+                                .thenReturn(Optional.of(tenant));
 
-        assertThrows(
-                BadCredentialsException.class,
-                () -> authService.login(validRequest()));
+                when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
+                                .thenReturn(Optional.of(application));
 
-        verify(tenantMembershipRepository, never())
-                .findByUserEmailAndTenantSlugAndStatus(anyString(), anyString(), any());
-    }
+                when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
+                                tenant.getId(),
+                                application.getId(),
+                                TenantApplication.Status.ACTIVE))
+                                .thenReturn(Optional.empty());
 
-    @Test
-    void shouldRejectLoginWhenMembershipDoesNotExist() {
+                assertThrows(
+                                BadCredentialsException.class,
+                                () -> authService.login(validRequest()));
 
-        when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
-                .thenReturn(Optional.of(tenant));
+                verify(tenantMembershipRepository, never())
+                                .findByUserEmailAndTenantSlugAndStatus(anyString(), anyString(), any());
+        }
 
-        when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
-                .thenReturn(Optional.of(application));
+        @Test
+        void shouldRejectLoginWhenMembershipDoesNotExist() {
 
-        TenantApplication tenantApplication = new TenantApplication();
+                when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
+                                .thenReturn(Optional.of(tenant));
 
-        when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
-                tenant.getId(),
-                application.getId(),
-                TenantApplication.Status.ACTIVE))
-                .thenReturn(Optional.of(tenantApplication));
+                when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
+                                .thenReturn(Optional.of(application));
 
-        when(tenantMembershipRepository.findByUserEmailAndTenantSlugAndStatus(
-                email,
-                tenantSlug,
-                TenantMembership.Status.ACTIVE))
-                .thenReturn(Optional.empty());
+                TenantApplication tenantApplication = new TenantApplication();
 
-        assertThrows(
-                BadCredentialsException.class,
-                () -> authService.login(validRequest()));
+                when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
+                                tenant.getId(),
+                                application.getId(),
+                                TenantApplication.Status.ACTIVE))
+                                .thenReturn(Optional.of(tenantApplication));
 
-        verify(passwordEncoder, never()).matches(anyString(), anyString());
-    }
+                when(tenantMembershipRepository.findByUserEmailAndTenantSlugAndStatus(
+                                email,
+                                tenantSlug,
+                                TenantMembership.Status.ACTIVE))
+                                .thenReturn(Optional.empty());
 
-    @Test
-    void shouldRejectLoginWithInvalidPassword() {
+                assertThrows(
+                                BadCredentialsException.class,
+                                () -> authService.login(validRequest()));
 
-        when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
-                .thenReturn(Optional.of(tenant));
+                verify(passwordEncoder, never()).matches(anyString(), anyString());
+        }
 
-        when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
-                .thenReturn(Optional.of(application));
+        @Test
+        void shouldRejectLoginWithInvalidPassword() {
 
-        when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
-                tenant.getId(),
-                application.getId(),
-                TenantApplication.Status.ACTIVE))
-                .thenReturn(Optional.of(new TenantApplication()));
+                when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
+                                .thenReturn(Optional.of(tenant));
 
-        when(tenantMembershipRepository.findByUserEmailAndTenantSlugAndStatus(
-                email,
-                tenantSlug,
-                TenantMembership.Status.ACTIVE))
-                .thenReturn(Optional.of(membership));
+                when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
+                                .thenReturn(Optional.of(application));
 
-        when(passwordEncoder.matches(password, user.getPassword()))
-                .thenReturn(false);
+                when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
+                                tenant.getId(),
+                                application.getId(),
+                                TenantApplication.Status.ACTIVE))
+                                .thenReturn(Optional.of(new TenantApplication()));
 
-        assertThrows(
-                BadCredentialsException.class,
-                () -> authService.login(validRequest()));
+                when(tenantMembershipRepository.findByUserEmailAndTenantSlugAndStatus(
+                                email,
+                                tenantSlug,
+                                TenantMembership.Status.ACTIVE))
+                                .thenReturn(Optional.of(membership));
 
-        verify(membershipApplicationRepository, never())
-                .findByMembershipIdAndApplicationIdAndStatus(any(), any(), any());
+                when(passwordEncoder.matches(password, user.getPassword()))
+                                .thenReturn(false);
 
-        verify(refreshTokenService, never())
-                .createRefreshToken(any());
-    }
+                assertThrows(
+                                BadCredentialsException.class,
+                                () -> authService.login(validRequest()));
 
-    @Test
-    void shouldRejectLoginWhenUserIsDisabled() {
+                verify(membershipApplicationRepository, never())
+                                .findByMembershipIdAndApplicationIdAndStatus(any(), any(), any());
 
-        user.setEnabled(false);
+                verify(refreshTokenService, never())
+                                .createRefreshToken(any(),any());
+        }
 
-        when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
-                .thenReturn(Optional.of(tenant));
+        @Test
+        void shouldRejectLoginWhenUserIsDisabled() {
 
-        when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
-                .thenReturn(Optional.of(application));
+                user.setEnabled(false);
 
-        when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
-                tenant.getId(),
-                application.getId(),
-                TenantApplication.Status.ACTIVE))
-                .thenReturn(Optional.of(new TenantApplication()));
+                when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
+                                .thenReturn(Optional.of(tenant));
 
-        when(tenantMembershipRepository.findByUserEmailAndTenantSlugAndStatus(
-                email,
-                tenantSlug,
-                TenantMembership.Status.ACTIVE))
-                .thenReturn(Optional.of(membership));
+                when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
+                                .thenReturn(Optional.of(application));
 
-        assertThrows(
-                BadCredentialsException.class,
-                () -> authService.login(validRequest()));
+                when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
+                                tenant.getId(),
+                                application.getId(),
+                                TenantApplication.Status.ACTIVE))
+                                .thenReturn(Optional.of(new TenantApplication()));
 
-        verify(passwordEncoder, never()).matches(anyString(), anyString());
-        verify(refreshTokenService, never()).createRefreshToken(any());
-    }
+                when(tenantMembershipRepository.findByUserEmailAndTenantSlugAndStatus(
+                                email,
+                                tenantSlug,
+                                TenantMembership.Status.ACTIVE))
+                                .thenReturn(Optional.of(membership));
 
-    @Test
-    void shouldRejectLoginWhenMembershipApplicationDoesNotExist() {
+                assertThrows(
+                                BadCredentialsException.class,
+                                () -> authService.login(validRequest()));
 
-        when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
-                .thenReturn(Optional.of(tenant));
+                verify(passwordEncoder, never()).matches(anyString(), anyString());
+                verify(refreshTokenService, never()).createRefreshToken(any(), any());
+        }
 
-        when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
-                .thenReturn(Optional.of(application));
+        @Test
+        void shouldRejectLoginWhenMembershipApplicationDoesNotExist() {
 
-        when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
-                tenant.getId(),
-                application.getId(),
-                TenantApplication.Status.ACTIVE))
-                .thenReturn(Optional.of(new TenantApplication()));
+                when(tenantRepository.findBySlugAndActiveTrue(tenantSlug))
+                                .thenReturn(Optional.of(tenant));
 
-        when(tenantMembershipRepository.findByUserEmailAndTenantSlugAndStatus(
-                email,
-                tenantSlug,
-                TenantMembership.Status.ACTIVE))
-                .thenReturn(Optional.of(membership));
+                when(applicationRepository.findByAppKeyAndActiveTrue(appKey))
+                                .thenReturn(Optional.of(application));
 
-        when(passwordEncoder.matches(password, user.getPassword()))
-                .thenReturn(true);
+                when(tenantApplicationRepository.findByTenantIdAndApplicationIdAndStatus(
+                                tenant.getId(),
+                                application.getId(),
+                                TenantApplication.Status.ACTIVE))
+                                .thenReturn(Optional.of(new TenantApplication()));
 
-        when(membershipApplicationRepository.findByMembershipIdAndApplicationIdAndStatus(
-                membership.getId(),
-                application.getId(),
-                MembershipApplication.Status.ACTIVE))
-                .thenReturn(Optional.empty());
+                when(tenantMembershipRepository.findByUserEmailAndTenantSlugAndStatus(
+                                email,
+                                tenantSlug,
+                                TenantMembership.Status.ACTIVE))
+                                .thenReturn(Optional.of(membership));
 
-        assertThrows(
-                BadCredentialsException.class,
-                () -> authService.login(validRequest()));
+                when(passwordEncoder.matches(password, user.getPassword()))
+                                .thenReturn(true);
 
-        verify(refreshTokenService, never()).createRefreshToken(any());
-    }
+                when(membershipApplicationRepository.findByMembershipIdAndApplicationIdAndStatus(
+                                membership.getId(),
+                                application.getId(),
+                                MembershipApplication.Status.ACTIVE))
+                                .thenReturn(Optional.empty());
+
+                assertThrows(
+                                BadCredentialsException.class,
+                                () -> authService.login(validRequest()));
+
+                verify(refreshTokenService, never()).createRefreshToken(any(), any());
+        }
 }

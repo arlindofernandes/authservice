@@ -2,6 +2,7 @@ package com.auth.authservice.service;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -23,12 +24,14 @@ public class RefreshTokenService {
     }
 
     @Transactional
-    public RefreshToken createRefreshToken(MembershipApplication membershipApplication) {
+    public RefreshToken createRefreshToken(MembershipApplication membershipApplication, UUID sessionId) {
 
         RefreshToken token = new RefreshToken();
+        Objects.requireNonNull(sessionId, "sessionId cannot be null");
 
         token.setMembershipApplication(membershipApplication);
         token.setToken(UUID.randomUUID().toString());
+        token.setSessionId(sessionId);
         token.setExpiryDate(Instant.now().plus(7, ChronoUnit.DAYS));
         token.setRevoked(false);
         token.setUsed(false);
@@ -56,7 +59,7 @@ public class RefreshTokenService {
     public RefreshToken validateAndRotate(String refreshToken) {
 
         RefreshToken token = repository
-                .findByToken(refreshToken)
+                .findByTokenForUpdate(refreshToken)
                 .orElseThrow(InvalidRefreshTokenException::new);
 
         MembershipApplication membershipApplication = token.getMembershipApplication();
@@ -76,8 +79,16 @@ public class RefreshTokenService {
         return repository.save(token);
     }
 
-    public RefreshToken rotateToken(RefreshToken oldToken) {
-        return createRefreshToken(oldToken.getMembershipApplication());
+    @Transactional
+    public void revokeSession(UUID sessionId) {
+        var tokens = repository.findAllBySessionIdAndRevokedFalse(sessionId);
+
+        tokens.forEach(token -> {
+            token.setUsed(true);
+            token.setRevoked(true);
+        });
+
+        repository.saveAll(tokens);
     }
 
     @Transactional

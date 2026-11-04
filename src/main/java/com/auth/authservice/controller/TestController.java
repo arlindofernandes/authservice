@@ -18,4 +18,9 @@ public class TestController {
     public String admin() {
         return "Acesso admin";
     }
+
+    @GetMapping("/internal/test")
+    public String internal() {
+        return "Acesso application client";
+    }
 }

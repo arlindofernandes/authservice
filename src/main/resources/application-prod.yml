@@ -17,3 +17,5 @@ spring:
 jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}
+  client-secret: ${CLIENT_JWT_SECRET}
+  client-expiration: ${CLIENT_JWT_EXPIRATION}

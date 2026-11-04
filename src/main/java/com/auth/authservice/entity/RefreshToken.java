@@ -31,6 +31,9 @@ public class RefreshToken {
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "session_id", nullable = false)
+    private UUID sessionId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "membership_application_id", nullable = false)
     private MembershipApplication membershipApplication;
