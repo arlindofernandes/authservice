@@ -11,7 +11,6 @@ import com.auth.authservice.entity.MembershipApplication;
 import com.auth.authservice.entity.RefreshToken;
 import com.auth.authservice.repository.RefreshTokenRepository;
 
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -52,7 +51,7 @@ public class RefreshTokenService {
         return token;
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW, noRollbackFor = {
+    @Transactional(noRollbackFor = {
             RefreshTokenReuseException.class,
             InvalidRefreshTokenException.class
     })

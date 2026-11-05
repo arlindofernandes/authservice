@@ -135,14 +135,18 @@ public class AuthService {
                                 expiration);
         }
 
-        @Transactional
+        @Transactional(noRollbackFor = {
+                        RefreshTokenReuseException.class,
+                        InvalidRefreshTokenException.class
+        })
         public AuthResponse refreshToken(RefreshRequest request) {
-
                 // Valida e invalida o refresh token anterior.
                 RefreshToken oldToken = refreshTokenService
                                 .validateAndRotate(request.getRefreshToken());
 
-                MembershipApplication membershipApplication = oldToken.getMembershipApplication();
+                MembershipApplication membershipApplication = membershipApplicationRepository
+                                .findByIdWithAssociations(oldToken.getMembershipApplication().getId())
+                                .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
 
                 // Confere se o acesso continua ativo.
                 validateMembershipApplication(membershipApplication);
