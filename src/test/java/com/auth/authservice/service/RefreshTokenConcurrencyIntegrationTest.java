@@ -529,10 +529,11 @@ class RefreshTokenConcurrencyIntegrationTest {
                                 .getResponse()
                                 .getContentAsString();
 
-                com.fasterxml.jackson.databind.JsonNode refreshJson = new com.fasterxml.jackson.databind.ObjectMapper()
-                                .readTree(refreshResponse);
+                String refreshJson = objectMapper.readTree(refreshResponse)
+                                .get("refreshToken")
+                                .asText();
 
-                String newRefreshToken = refreshJson.get("refreshToken").asText();
+                String newRefreshToken = refreshJson;
 
                 assertNotEquals(oldRefreshToken, newRefreshToken);
         }
@@ -566,7 +567,6 @@ class RefreshTokenConcurrencyIntegrationTest {
                 String firstRefreshToken = objectMapper.readTree(loginResponse)
                                 .get("refreshToken")
                                 .asText();
-                var objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
                 // 2. Renova o token pela primeira vez.
                 String firstRefreshRequest = """

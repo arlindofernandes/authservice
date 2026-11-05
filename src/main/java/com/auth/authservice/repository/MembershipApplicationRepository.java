@@ -18,14 +18,14 @@ public interface MembershipApplicationRepository
                         MembershipApplication.Status status);
 
         @Query("""
-                            SELECT ma
-                            FROM MembershipApplication ma
-                            JOIN FETCH ma.application
-                            JOIN FETCH ma.membership m
-                            JOIN FETCH m.tenant
-                            JOIN FETCH m.user
-                            JOIN FETCH ma.tenantApplication
-                            WHERE ma.id = :id
+                        SELECT ma
+                        FROM MembershipApplication ma
+                        JOIN FETCH ma.application
+                        JOIN FETCH ma.membership m
+                        JOIN FETCH m.tenant
+                        JOIN FETCH m.user
+                        JOIN FETCH ma.tenantApplication
+                        WHERE ma.id = :id
                         """)
         Optional<MembershipApplication> findByIdWithAssociations(@Param("id") UUID id);
 }
