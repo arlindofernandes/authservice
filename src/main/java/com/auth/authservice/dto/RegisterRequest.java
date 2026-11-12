@@ -20,6 +20,10 @@ public class RegisterRequest {
         return tenantName;
     }
 
+    public void setTenantName(String tenantName) {
+        this.tenantName = tenantName;
+    }
+
     public String getEmail() {
         return email;
     }

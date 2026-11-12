@@ -149,7 +149,7 @@ Create a `.env` file:
 SPRING_PROFILES_ACTIVE=prod
 
 DB_URL=jdbc:postgresql://db:5432/authdb
-DB_USERNAME=auth
+DB_USER=auth
 DB_PASSWORD=auth
 
 REDIS_HOST=redis

@@ -1,5 +1,6 @@
 package com.auth.authservice.controller;
 
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,20 +33,21 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@RequestBody LoginRequest request) {
+    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
 
         return authService.login(request);
 
     }
 
     @PostMapping("/refresh")
-    public AuthResponse refresh(@RequestBody RefreshRequest request) {
+    public AuthResponse refresh(@Valid @RequestBody RefreshRequest request) {
         return authService.refreshToken(request);
     }
 
     @PostMapping("/logout")
-    public void logout(HttpServletRequest request) {
+    public ResponseEntity<Void> logout(HttpServletRequest request) {
         authService.logout(request);
+        return ResponseEntity.noContent().build();
     }
 
 

@@ -4,10 +4,12 @@ import com.auth.authservice.dto.AuthResponse;
 import com.auth.authservice.dto.LoginRequest;
 import com.auth.authservice.dto.RefreshRequest;
 import com.auth.authservice.dto.RegisterRequest;
-import com.auth.authservice.entity.RefreshToken;
 import com.auth.authservice.entity.Role;
 import com.auth.authservice.entity.Tenant;
 import com.auth.authservice.entity.User;
+import com.auth.authservice.exception.DomainNotAllowedException;
+import com.auth.authservice.exception.EmailAlreadyRegisteredException;
+import com.auth.authservice.exception.InvalidCredentialsException;
 import com.auth.authservice.repository.RoleRepository;
 import com.auth.authservice.repository.TenantRepository;
 import com.auth.authservice.repository.UserRepository;
@@ -17,6 +19,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Set;
 
@@ -55,6 +58,7 @@ public class AuthService {
         expiration = jwtService.getExpiration() / 1000; // Convert to seconds
     }
 
+    @Transactional
     public AuthResponse register(RegisterRequest request) {
 
         String domain = request.getEmail().substring(request.getEmail().indexOf("@") + 1);
@@ -75,14 +79,14 @@ public class AuthService {
             String emailDomain = request.getEmail().split("@")[1];
 
             if (!emailDomain.equalsIgnoreCase(tenant.getDomain())) {
-                throw new RuntimeException("Email domain not allowed");
+                throw new DomainNotAllowedException();
             }
             //USUÁRIOS POSTERIORES → USER
             role = roleRepository.findByName("USER")
                     .orElseThrow();
         }
         if (userRepository.findByEmailAndTenantId(request.getEmail(), tenant.getId()).isPresent()) {
-            throw new RuntimeException("Email already registered in this tenant");
+            throw new EmailAlreadyRegisteredException();
         }
 
         User user = new User();
@@ -95,11 +99,11 @@ public class AuthService {
 
         String accessToken = jwtService.generateToken(user);
 
-        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+        String refreshToken = refreshTokenService.createRefreshToken(user);
 
         return new AuthResponse(
                 accessToken,
-                refreshToken.getToken(),
+                refreshToken,
                 "Bearer",
                 expiration);
     }
@@ -109,10 +113,9 @@ public class AuthService {
         // extrai domínio do email
         String domain = request.getEmail()
                 .substring(request.getEmail().indexOf("@") + 1);
-        System.out.println(domain);
         Tenant tenant = tenantRepository
                 .findByDomain(domain)
-                .orElseThrow(() -> new RuntimeException("Tenant not found"));
+                .orElseThrow(InvalidCredentialsException::new);
 
         try {
             TenantContext.set(tenant.getId());
@@ -123,15 +126,15 @@ public class AuthService {
                             request.getPassword()));
             User user = userRepository
                     .findByEmailAndTenantId(request.getEmail(), tenant.getId())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                    .orElseThrow(InvalidCredentialsException::new);
 
 
             String accessToken = jwtService.generateToken(user);
-            RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+            String refreshToken = refreshTokenService.createRefreshToken(user);
 
             return new AuthResponse(
                     accessToken,
-                    refreshToken.getToken(),
+                    refreshToken,
                     "Bearer",
                     expiration);
         } finally {
@@ -141,21 +144,15 @@ public class AuthService {
 
     public AuthResponse refreshToken(RefreshRequest request) {
 
-        // 🔥 valida + marca como usado
-        RefreshToken oldToken = refreshTokenService
-                .validateAndRotate(request.getRefreshToken());
+        RefreshTokenService.RotatedRefreshToken rotatedToken = refreshTokenService
+                .rotate(request.getRefreshToken());
 
-        // 🔥 cria novo refresh token
-        RefreshToken newToken = refreshTokenService
-                .createRefreshToken(oldToken.getUser());
-
-        // 🔥 gera novo access token
         String accessToken = jwtService
-                .generateToken(oldToken.getUser());
+                .generateToken(rotatedToken.user());
 
         return new AuthResponse(
                 accessToken,
-                newToken.getToken(),
+                rotatedToken.token(),
                 "Bearer",
                 expiration);
     }

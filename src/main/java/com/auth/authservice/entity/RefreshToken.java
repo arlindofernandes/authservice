@@ -15,7 +15,8 @@ public class RefreshToken {
     @GeneratedValue
     private UUID id;
 
-    private String token;
+    @Column(name = "token_hash", nullable = false, unique = true, length = 64)
+    private String tokenHash;
 
     private Instant expiryDate;
 

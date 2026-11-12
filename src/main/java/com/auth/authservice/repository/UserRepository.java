@@ -3,15 +3,13 @@ package com.auth.authservice.repository;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import org.springframework.data.repository.Repository;
 
 import com.auth.authservice.entity.User;
 
-@Repository
-public interface UserRepository extends JpaRepository<User, UUID> {
+public interface UserRepository extends Repository<User, UUID> {
 
-    Optional<User> findByEmail(String email);
+    User save(User user);
 
     Optional<User> findByEmailAndTenantId(String email, UUID tenantId);
 

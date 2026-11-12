@@ -1,5 +1,9 @@
 package com.auth.authservice.config;
 
+import java.time.Instant;
+import java.util.Map;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -12,6 +16,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 import com.auth.authservice.security.JwtAuthenticationFilter;
+import com.auth.authservice.exception.ApiError;
 
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -20,9 +25,11 @@ import jakarta.servlet.http.HttpServletResponse;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final ObjectMapper objectMapper;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, ObjectMapper objectMapper) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.objectMapper = objectMapper;
     }
 
     @Bean
@@ -36,11 +43,17 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers("/auth/register", "/auth/login", "/auth/refresh").permitAll()
+                        .requestMatchers("/auth/logout").authenticated()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
-                            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                            writeSecurityError(request.getRequestURI(), response, HttpServletResponse.SC_UNAUTHORIZED,
+                                    "Unauthorized", "Authentication is required");
+                        })
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            writeSecurityError(request.getRequestURI(), response, HttpServletResponse.SC_FORBIDDEN,
+                                    "Forbidden", "Access is denied");
                         }))
                 .addFilterBefore(jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class);
@@ -53,6 +66,18 @@ public class SecurityConfig {
             AuthenticationConfiguration configuration) throws Exception {
 
         return configuration.getAuthenticationManager();
+    }
+
+    private void writeSecurityError(
+            String path,
+            HttpServletResponse response,
+            int status,
+            String error,
+            String message) throws java.io.IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        objectMapper.writeValue(response.getWriter(), new ApiError(
+                Instant.now(), status, error, message, path, Map.of()));
     }
 
 }

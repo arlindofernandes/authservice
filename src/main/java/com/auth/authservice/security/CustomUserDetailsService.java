@@ -10,6 +10,7 @@ import com.auth.authservice.entity.User;
 import com.auth.authservice.repository.UserRepository;
 
 import java.util.UUID;
+import java.util.stream.Stream;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
@@ -23,7 +24,7 @@ public class CustomUserDetailsService implements UserDetailsService {
         public UserDetails loadUserByUsername(String email)
                         throws UsernameNotFoundException {
 
-                UUID tenantId = TenantContext.get();
+                UUID tenantId = TenantContext.require();
                 User user = userRepository
                                 .findByEmailAndTenantId(email,tenantId)
                                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
@@ -33,11 +34,15 @@ public class CustomUserDetailsService implements UserDetailsService {
                                 .username(user.getEmail())
                                 .password(user.getPassword())
                                 .authorities(
-                                                user.getRoles()
-                                                                .stream()
+                                                Stream.concat(
+                                                                user.getRoles().stream()
+                                                                                .map(role -> new SimpleGrantedAuthority(
+                                                                                                "ROLE_" + role.getName())),
+                                                                user.getRoles().stream()
                                                                 .flatMap(role -> role.getPermissions().stream())
                                                                 .map(permission -> new SimpleGrantedAuthority(
-                                                                                permission.getName()))
+                                                                                permission.getName())))
+                                                                .distinct()
                                                                 .toList())
                                 .build();
         }
