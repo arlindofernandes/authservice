@@ -48,7 +48,7 @@ public class JwtService {
 
         return Jwts.builder()
                 .setSubject(user.getEmail())
-                .claim("tenantId",user.getTenantId().toString())
+                .claim("tenantId", user.getTenantId().toString())
                 .claim("roles", roles)
                 .claim("permissions", permissions)
                 .setIssuedAt(new Date())
@@ -67,15 +67,21 @@ public class JwtService {
     }
 
     private boolean isTokenExpired(String token) {
-        return extractAllClaims(token)
-                .getExpiration()
-                .before(new Date());
+        Date expiration = extractAllClaims(token).getExpiration();
+
+        return expiration == null || expiration.before(new Date());
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
 
+        if (userDetails == null) {
+            return false;
+        }
+
         final String email = extractEmail(token);
-        return email.equals(userDetails.getUsername())
+
+        return email != null
+                && email.equals(userDetails.getUsername())
                 && !isTokenExpired(token);
     }
 
@@ -96,9 +102,19 @@ public class JwtService {
     }
 
     public UUID extractTenantId(String token) {
-        return UUID.fromString(
-                extractClaim(token, claims -> claims.get("tenantId", String.class))
-        );
+        String tenantId = extractClaim(
+                token,
+                claims -> claims.get("tenantId", String.class));
+
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("JWT tenantId claim is missing");
+        }
+
+        try {
+            return UUID.fromString(tenantId);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("JWT tenantId claim is invalid", e);
+        }
     }
 
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
