@@ -1,5 +1,8 @@
 package com.auth.authservice.controller;
 
+import java.security.Principal;
+import java.util.UUID;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -10,6 +13,7 @@ import com.auth.authservice.dto.AuthResponse;
 import com.auth.authservice.dto.LoginRequest;
 import com.auth.authservice.dto.RefreshRequest;
 import com.auth.authservice.dto.RegisterRequest;
+import com.auth.authservice.security.TenantContext;
 import com.auth.authservice.service.AuthService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -45,10 +49,20 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletRequest request) {
-        authService.logout(request);
+    public ResponseEntity<Void> logout(
+            HttpServletRequest request,
+            @Valid @RequestBody RefreshRequest refreshRequest,
+            Principal principal) {
+
+        UUID tenantId = TenantContext.require();
+
+        authService.logout(
+                request,
+                principal.getName(),
+                tenantId,
+                refreshRequest);
+
         return ResponseEntity.noContent().build();
     }
-
 
 }

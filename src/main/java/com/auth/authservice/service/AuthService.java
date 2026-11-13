@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -37,13 +38,13 @@ public class AuthService {
     long expiration;
 
     public AuthService(AuthenticationManager authenticationManager,
-                       JwtService jwtService,
-                       RefreshTokenService refreshTokenService,
-                       TokenBlacklistService tokenBlacklistService,
-                       TenantRepository tenantRepository,
-                       UserRepository userRepository,
-                       RoleRepository roleRepository,
-                       PasswordEncoder passwordEncoder
+            JwtService jwtService,
+            RefreshTokenService refreshTokenService,
+            TokenBlacklistService tokenBlacklistService,
+            TenantRepository tenantRepository,
+            UserRepository userRepository,
+            RoleRepository roleRepository,
+            PasswordEncoder passwordEncoder
 
     ) {
         this.authenticationManager = authenticationManager;
@@ -67,7 +68,7 @@ public class AuthService {
                 .orElse(null);
         Role role;
         if (tenant == null) {
-            //PRIMEIRO USUÁRIO É ADMIN → CRIA TENANT
+            // PRIMEIRO USUÁRIO É ADMIN → CRIA TENANT
             tenant = new Tenant();
             tenant.setName(request.getTenantName());
             tenant.setDomain(domain);
@@ -75,13 +76,13 @@ public class AuthService {
             role = roleRepository.findByName("ADMIN")
                     .orElseThrow();
         } else {
-            //VALIDAR DOMÍNIO DO EMAIL
+            // VALIDAR DOMÍNIO DO EMAIL
             String emailDomain = request.getEmail().split("@")[1];
 
             if (!emailDomain.equalsIgnoreCase(tenant.getDomain())) {
                 throw new DomainNotAllowedException();
             }
-            //USUÁRIOS POSTERIORES → USER
+            // USUÁRIOS POSTERIORES → USER
             role = roleRepository.findByName("USER")
                     .orElseThrow();
         }
@@ -128,7 +129,6 @@ public class AuthService {
                     .findByEmailAndTenantId(request.getEmail(), tenant.getId())
                     .orElseThrow(InvalidCredentialsException::new);
 
-
             String accessToken = jwtService.generateToken(user);
             String refreshToken = refreshTokenService.createRefreshToken(user);
 
@@ -157,19 +157,32 @@ public class AuthService {
                 expiration);
     }
 
-    public void logout(HttpServletRequest request) {
+    public void logout(
+            HttpServletRequest request,
+            String email,
+            UUID tenantId,
+            RefreshRequest refreshRequest) {
 
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return;
+            throw new InvalidCredentialsException();
         }
 
-        String token = authHeader.substring(7);
+        String accessToken = authHeader.substring(7);
 
-        long remainingTime = jwtService.getRemainingTime(token);
+        // Revoga o refresh token desta sessão
+        refreshTokenService.revoke(
+                refreshRequest.getRefreshToken(),
+                email,
+                tenantId);
 
-        tokenBlacklistService.blacklistToken(token, remainingTime);
+        // Invalida o access token atual
+        long remainingTime = jwtService.getRemainingTime(accessToken);
+
+        if (remainingTime > 0) {
+            tokenBlacklistService.blacklistToken(accessToken, remainingTime);
+        }
     }
 
 }

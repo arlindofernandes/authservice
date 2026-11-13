@@ -6,6 +6,7 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +61,32 @@ public class RefreshTokenService {
 
         IssuedRefreshToken newToken = issueRefreshToken(token.getUser());
         return new RotatedRefreshToken(token.getUser(), newToken.token());
+    }
+
+    @Transactional
+    public void revoke(String rawToken, String email, UUID tenantId) {
+        RefreshToken token = repository
+                .findByTokenHashForUpdate(hash(rawToken))
+                .orElseThrow(() -> new RefreshTokenValidationException("Invalid refresh token"));
+
+        if (!token.getUser().getEmail().equals(email)
+                || !token.getTenantId().equals(tenantId)
+                || !token.getUser().getTenantId().equals(tenantId)) {
+            throw new RefreshTokenValidationException("Invalid refresh token");
+        }
+
+        if (token.isUsed() || token.isRevoked()) {
+            throw new RefreshTokenValidationException("Refresh token already revoked");
+        }
+
+        if (token.getExpiryDate().isBefore(Instant.now())) {
+            throw new RefreshTokenValidationException("Refresh token expired");
+        }
+
+        token.setUsed(true);
+        token.setRevoked(true);
+
+        repository.save(token);
     }
 
     public void revokeAllUserTokens(User user) {

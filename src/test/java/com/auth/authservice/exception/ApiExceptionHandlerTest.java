@@ -1,5 +1,6 @@
 package com.auth.authservice.exception;
 
+import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,10 @@ class ApiExceptionHandlerTest {
                 .handleDataIntegrityViolation(request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(response.getBody().message()).isEqualTo("A record with these values already exists");
+
+        ApiError error = requireNonNull(response.getBody());
+
+        assertThat(error.message())
+                .isEqualTo("A record with these values already exists");
     }
 }
