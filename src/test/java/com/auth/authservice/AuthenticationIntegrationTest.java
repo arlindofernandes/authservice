@@ -133,4 +133,13 @@ class AuthenticationIntegrationTest {
                                 .andReturn();
                 return objectMapper.readTree(result.getResponse().getContentAsString());
         }
+
+        @Test
+        void doesNotCreateHttpSession() throws Exception {
+                MvcResult result = mockMvc.perform(get("/api/admin"))
+                                .andExpect(status().isUnauthorized())
+                                .andReturn();
+
+                assertThat(result.getRequest().getSession(false)).isNull();
+        }
 }
