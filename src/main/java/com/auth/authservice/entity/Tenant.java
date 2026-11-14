@@ -21,7 +21,10 @@ public class Tenant {
     @Column(nullable = false, unique = true)
     private String name;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String domain;
+
+    @Column(nullable = false, unique = true)
+    private String slug;
 
 }

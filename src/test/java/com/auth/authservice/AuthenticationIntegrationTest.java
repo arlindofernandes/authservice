@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.Map;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -63,6 +64,12 @@ class AuthenticationIntegrationTest {
                 registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
                 registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
                 registry.add("spring.jpa.show-sql", () -> false);
+        }
+
+        @BeforeEach
+        void cleanDatabase() {
+                jdbcTemplate.execute(
+                                "TRUNCATE TABLE refresh_token, user_roles, users, tenant CASCADE");
         }
 
         @Test
@@ -132,6 +139,56 @@ class AuthenticationIntegrationTest {
                                 .andExpect(expectedStatus)
                                 .andReturn();
                 return objectMapper.readTree(result.getResponse().getContentAsString());
+        }
+
+        @Test
+        void isolatesAuthenticationBetweenTenants() throws Exception {
+                JsonNode acmeAdmin = register(
+                                "admin@acme.test",
+                                "AdminSecret123",
+                                "Acme");
+
+                JsonNode betaAdmin = register(
+                                "admin@beta.test",
+                                "BetaSecret123",
+                                "Beta");
+
+                String acmeAccessToken = acmeAdmin.required("accessToken").asText();
+                String betaAccessToken = betaAdmin.required("accessToken").asText();
+
+                // O administrador do tenant Acme acessa sua própria área.
+                mockMvc.perform(get("/api/admin")
+                                .header("Authorization", "Bearer " + acmeAccessToken))
+                                .andExpect(status().isOk());
+
+                // O administrador do tenant Beta acessa sua própria área.
+                mockMvc.perform(get("/api/admin")
+                                .header("Authorization", "Bearer " + betaAccessToken))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
+        void allowsSameEmailInDifferentTenants() throws Exception {
+                JsonNode acmeUser = register(
+                                "admin@acme.test",
+                                "Password123",
+                                "Acme");
+
+                JsonNode betaUser = register(
+                                "admin@beta.test",
+                                "Password123",
+                                "Beta");
+
+                assertThat(acmeUser.hasNonNull("accessToken")).isTrue();
+                assertThat(betaUser.hasNonNull("accessToken")).isTrue();
+
+                Integer tenantCount = jdbcTemplate.queryForObject(
+                                "SELECT COUNT(DISTINCT tenant_id) FROM users WHERE email IN (?, ?)",
+                                Integer.class,
+                                "admin@acme.test",
+                                "admin@beta.test");
+
+                assertThat(tenantCount).isEqualTo(2);
         }
 
         @Test
