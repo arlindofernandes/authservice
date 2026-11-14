@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.lang.NonNull;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -170,12 +171,12 @@ class AuthenticationIntegrationTest {
         @Test
         void allowsSameEmailInDifferentTenants() throws Exception {
                 JsonNode acmeUser = register(
-                                "admin@acme.test",
+                                "admin@company.test",
                                 "Password123",
                                 "Acme");
 
                 JsonNode betaUser = register(
-                                "admin@beta.test",
+                                "admin@company.test",
                                 "Password123",
                                 "Beta");
 
@@ -183,12 +184,27 @@ class AuthenticationIntegrationTest {
                 assertThat(betaUser.hasNonNull("accessToken")).isTrue();
 
                 Integer tenantCount = jdbcTemplate.queryForObject(
-                                "SELECT COUNT(DISTINCT tenant_id) FROM users WHERE email IN (?, ?)",
+                                "SELECT COUNT(DISTINCT tenant_id) FROM users WHERE email = ?",
                                 Integer.class,
-                                "admin@acme.test",
-                                "admin@beta.test");
+                                "admin@company.test");
 
                 assertThat(tenantCount).isEqualTo(2);
+        }
+
+        @Test
+        void preventsDuplicateEmailWithinSameTenant() throws Exception {
+                register(
+                                "admin@company.test",
+                                "Password123",
+                                "Acme");
+
+                mockMvc.perform(post("/auth/register")
+                                .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                                .content(requireNonNull(objectMapper.writeValueAsString(Map.of(
+                                                "email", "admin@company.test",
+                                                "password", "Password123",
+                                                "tenantName", "Acme")))))
+                                .andExpect(status().isConflict());
         }
 
         @Test
