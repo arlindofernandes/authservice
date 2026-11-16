@@ -133,7 +133,7 @@ class JwtAuthenticationFilterTest {
         when(jwtService.extractEmail(jwt)).thenReturn(email);
         when(jwtService.extractTenantId(jwt)).thenReturn(tenantId);
         when(userDetailsService.loadUserByUsername(email)).thenReturn(userDetails);
-        when(jwtService.isTokenValid(jwt, userDetails)).thenReturn(false);
+        when(jwtService.isTokenValid(jwt, userDetails, tenantId)).thenReturn(false);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", "Bearer " + jwt);

@@ -66,23 +66,23 @@ public class JwtService {
         return jwtProperties.getExpiration();
     }
 
-    private boolean isTokenExpired(String token) {
-        Date expiration = extractAllClaims(token).getExpiration();
+    public boolean isTokenValid(String token, UserDetails userDetails, UUID expectedTenantId) {
 
-        return expiration == null || expiration.before(new Date());
-    }
-
-    public boolean isTokenValid(String token, UserDetails userDetails) {
-
-        if (userDetails == null) {
+        if (userDetails == null || expectedTenantId == null) {
             return false;
         }
 
-        final String email = extractEmail(token);
+        Claims claims = extractAllClaims(token);
+
+        String email = claims.getSubject();
+        UUID tokenTenantId = extractTenantId(token);
+        Date expiration = claims.getExpiration();
 
         return email != null
                 && email.equals(userDetails.getUsername())
-                && !isTokenExpired(token);
+                && tokenTenantId.equals(expectedTenantId)
+                && expiration != null
+                && expiration.after(new Date());
     }
 
     private Claims extractAllClaims(String token) {
