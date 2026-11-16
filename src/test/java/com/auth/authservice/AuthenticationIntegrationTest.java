@@ -215,4 +215,25 @@ class AuthenticationIntegrationTest {
 
                 assertThat(result.getRequest().getSession(false)).isNull();
         }
+
+        @Test
+        void allowsDifferentEmailDomainsWithinSameTenant() throws Exception {
+                register("admin@acme.test", "AdminSecret123", "Acme");
+
+                JsonNode user = register(
+                                "user@gmail.com",
+                                "UserSecret123",
+                                "Acme");
+
+                assertThat(user.hasNonNull("accessToken")).isTrue();
+                assertThat(user.hasNonNull("refreshToken")).isTrue();
+
+                Integer userCount = jdbcTemplate.queryForObject(
+                                "SELECT COUNT(*) FROM users WHERE tenant_id = "
+                                                + "(SELECT id FROM tenant WHERE name = ?)",
+                                Integer.class,
+                                "Acme");
+
+                assertThat(userCount).isEqualTo(2);
+        }
 }

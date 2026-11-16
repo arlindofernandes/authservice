@@ -18,7 +18,6 @@ import com.auth.authservice.dto.RegisterRequest;
 import com.auth.authservice.entity.Role;
 import com.auth.authservice.entity.Tenant;
 import com.auth.authservice.entity.User;
-import com.auth.authservice.exception.DomainNotAllowedException;
 import com.auth.authservice.exception.EmailAlreadyRegisteredException;
 import com.auth.authservice.exception.InvalidCredentialsException;
 import com.auth.authservice.repository.RoleRepository;
@@ -82,12 +81,7 @@ public class AuthService {
                         role = roleRepository.findByName("ADMIN")
                                         .orElseThrow();
                 } else {
-                        // VALIDAR DOMÍNIO DO EMAIL
-                        String emailDomain = request.getEmail().split("@")[1];
 
-                        if (!emailDomain.equalsIgnoreCase(tenant.getDomain())) {
-                                throw new DomainNotAllowedException();
-                        }
                         // USUÁRIOS POSTERIORES → USER
                         role = roleRepository.findByName("USER")
                                         .orElseThrow();
