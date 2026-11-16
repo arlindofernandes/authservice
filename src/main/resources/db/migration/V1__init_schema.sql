@@ -35,10 +35,10 @@ CREATE TABLE user_roles (
 
 CREATE TABLE refresh_token (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    token VARCHAR(512) NOT NULL,
+    token VARCHAR(64) NOT NULL,
     user_id UUID NOT NULL,
     expiry_date TIMESTAMP NOT NULL,
-    revoked BOOLEAN DEFAULT FALSE,
-    used BOOLEAN DEFAULT FALSE,
+    revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    used BOOLEAN NOT NULL DEFAULT FALSE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

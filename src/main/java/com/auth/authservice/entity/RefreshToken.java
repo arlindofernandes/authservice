@@ -18,15 +18,19 @@ public class RefreshToken {
     @Column(name = "token_hash", nullable = false, unique = true, length = 64)
     private String tokenHash;
 
+    @Column(nullable = false)
     private Instant expiryDate;
 
-    private boolean revoked;
+    @Column(nullable = false)
+    private boolean revoked = false;
 
-    private boolean used;
+    @Column(nullable = false)
+    private boolean used = false;
 
     @Column(nullable = false)
     private UUID tenantId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 }
