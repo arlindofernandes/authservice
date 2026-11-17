@@ -367,9 +367,9 @@ Current migrations:
 - `V1__init_schema.sql`
 - `V2__seed_roles_permissions.sql`
 - `V3__add_multi_tenant.sql`
-- `V4__redesign_multi_tenant_architecture.sql`
+- `V4__associate_roles_permissions.sql`
 - `V5__hash_refresh_tokens.sql`
-- `V6__tenant_scoped_email_uniqueness.sql`
+- `V6__composite_unique_user_email_tenant.sql`
 
 ---
 
