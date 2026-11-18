@@ -15,6 +15,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.lang.NonNull;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -56,6 +57,9 @@ class AuthenticationIntegrationTest {
         @Autowired
         private JdbcTemplate jdbcTemplate;
 
+        @Autowired
+        private StringRedisTemplate redisTemplate;
+
         @DynamicPropertySource
         static void configureProperties(DynamicPropertyRegistry registry) {
                 registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
@@ -71,6 +75,14 @@ class AuthenticationIntegrationTest {
         void cleanDatabase() {
                 jdbcTemplate.execute(
                                 "TRUNCATE TABLE refresh_token, user_roles, users, tenant CASCADE");
+
+                var connectionFactory = requireNonNull(
+                                redisTemplate.getConnectionFactory(),
+                                "RedisConnectionFactory não está configurada");
+
+                try (var connection = connectionFactory.getConnection()) {
+                        connection.serverCommands().flushDb();
+                }
         }
 
         @Test
@@ -332,6 +344,26 @@ class AuthenticationIntegrationTest {
                 login("acme", "admin@acme.test", "AdminSecret123", status().isUnauthorized());
                 mockMvc.perform(get("/api/admin").header("Authorization", "Bearer " + accessToken))
                                 .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void limitsRepeatedFailedLoginAttempts() throws Exception {
+                register("admin@acme.test", "AdminSecret123", "Acme");
+
+                for (int attempt = 0; attempt < 5; attempt++) {
+                        login("acme", "admin@acme.test", "wrong-password", status().isUnauthorized());
+                }
+
+                MvcResult result = mockMvc.perform(post("/auth/login")
+                                .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                                .content(requireNonNull(objectMapper.writeValueAsString(Map.of(
+                                                "tenantSlug", "acme",
+                                                "email", "admin@acme.test",
+                                                "password", "wrong-password")))))
+                                .andExpect(status().isTooManyRequests())
+                                .andReturn();
+
+                assertThat(result.getResponse().getHeader("Retry-After")).isEqualTo("60");
         }
 
         private JsonNode login(@NonNull String tenantSlug, @NonNull String email, @NonNull String password,

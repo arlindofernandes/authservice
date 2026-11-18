@@ -15,8 +15,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 
 import com.auth.authservice.security.JwtAuthenticationFilter;
+import com.auth.authservice.security.RateLimitFilter;
 import com.auth.authservice.exception.ApiError;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -26,10 +28,13 @@ import jakarta.servlet.http.HttpServletResponse;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final ObjectMapper objectMapper;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, ObjectMapper objectMapper) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, RateLimitFilter rateLimitFilter,
+            ObjectMapper objectMapper) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.rateLimitFilter = rateLimitFilter;
         this.objectMapper = objectMapper;
     }
 
@@ -58,6 +63,7 @@ public class SecurityConfig {
                             writeSecurityError(request.getRequestURI(), response, HttpServletResponse.SC_FORBIDDEN,
                                     "Forbidden", "Access is denied");
                         }))
+                .addFilterBefore(rateLimitFilter, SecurityContextHolderFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class);
 

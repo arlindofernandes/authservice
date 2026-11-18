@@ -12,6 +12,7 @@ Implements JWT authentication, Role-Based Access Control (RBAC), refresh token r
 - Tenant-based authentication using a unique tenant slug
 - Refresh token rotation with reuse detection
 - Redis-based access token blacklist
+- Redis-backed rate limiting for public authentication endpoints
 - Tenant-scoped user registration and authentication
 
 ---
@@ -207,6 +208,7 @@ Refresh token reuse detection prevents previously rotated tokens from being reus
 - Refresh tokens stored as SHA-256 hashes.
 - Role- and permission-based authorization.
 - Access token blacklist using Redis.
+- Rate limiting by client address: login (5/min), refresh (10/min), registration and membership requests (3/hour).
 - Stateless HTTP security configuration.
 - Tenant-aware authentication and isolation.
 
