@@ -11,6 +11,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -98,28 +99,38 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             TenantContext.set(tenantId);
 
-            if (SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            try {
+                if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                if (jwtService.isTokenValid(jwt, userDetails, tenantId)) {
-                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                            userDetails,
-                            null,
-                            userDetails.getAuthorities());
+                    if (jwtService.isTokenValid(jwt, userDetails, tenantId)) {
+                        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.getAuthorities());
 
-                    authToken.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request));
+                        authToken.setDetails(
+                                new WebAuthenticationDetailsSource().buildDetails(request));
 
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
-                } else {
-                    writeSecurityError(
-                            request,
-                            response,
-                            HttpServletResponse.SC_UNAUTHORIZED,
-                            "Unauthorized",
-                            "Invalid or expired JWT");
-                    return;
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                    } else {
+                        writeSecurityError(
+                                request,
+                                response,
+                                HttpServletResponse.SC_UNAUTHORIZED,
+                                "Unauthorized",
+                                "Invalid or expired JWT");
+                        return;
+                    }
                 }
+            } catch (UsernameNotFoundException | JwtException | IllegalArgumentException exception) {
+                writeSecurityError(
+                        request,
+                        response,
+                        HttpServletResponse.SC_UNAUTHORIZED,
+                        "Unauthorized",
+                        "Invalid or expired JWT");
+                return;
             }
 
             filterChain.doFilter(request, response);

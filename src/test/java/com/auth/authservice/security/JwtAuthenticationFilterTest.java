@@ -18,6 +18,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import com.auth.authservice.service.JwtService;
 import com.auth.authservice.service.TokenBlacklistService;
@@ -146,5 +147,29 @@ class JwtAuthenticationFilterTest {
 
         assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
         verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @Test
+    void shouldReturnUnauthorizedWhenJwtUserNoLongerExists() throws Exception {
+        String jwt = "valid-format-token";
+        String email = "deleted@example.com";
+        UUID tenantId = UUID.randomUUID();
+
+        when(tokenBlacklistService.isBlacklisted(jwt)).thenReturn(false);
+        when(jwtService.extractEmail(jwt)).thenReturn(email);
+        when(jwtService.extractTenantId(jwt)).thenReturn(tenantId);
+        when(userDetailsService.loadUserByUsername(email))
+                .thenThrow(new UsernameNotFoundException("User not found"));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer " + jwt);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain filterChain = mock(FilterChain.class);
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+        verify(filterChain, never()).doFilter(request, response);
+        assertThat(TenantContext.get()).isNull();
     }
 }
