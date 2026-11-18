@@ -19,11 +19,16 @@ import com.auth.authservice.security.TenantContext;
 import com.auth.authservice.service.AuthService;
 import com.auth.authservice.service.MembershipRequestService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/auth")
+@Tag(name = "Authentication", description = "Registration, login, token refresh and logout")
 public class AuthController {
 
     private final AuthService authService;
@@ -35,6 +40,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @Operation(summary = "Register a new tenant and its initial administrator")
     public AuthResponse register(
             @Valid @RequestBody RegisterRequest request) {
 
@@ -42,6 +48,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
+    @Operation(summary = "Authenticate with tenant slug, email and password")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
 
         return authService.login(request);
@@ -49,17 +56,21 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
+    @Operation(summary = "Rotate a refresh token and issue a new token pair")
     public AuthResponse refresh(@Valid @RequestBody RefreshRequest request) {
         return authService.refreshToken(request);
     }
 
     @PostMapping("/membership-requests")
+    @Operation(summary = "Request membership in an existing tenant")
     public ResponseEntity<MembershipRequestResponse> requestMembership(
             @Valid @RequestBody MembershipRequestCreateRequest request) {
         return ResponseEntity.accepted().body(membershipRequestService.requestMembership(request));
     }
 
     @PostMapping("/logout")
+    @Operation(summary = "Revoke the current access and refresh tokens")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Void> logout(
             HttpServletRequest request,
             @Valid @RequestBody RefreshRequest refreshRequest,

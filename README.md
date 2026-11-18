@@ -13,7 +13,8 @@ Implements JWT authentication, Role-Based Access Control (RBAC), refresh token r
 - Refresh token rotation with reuse detection
 - Redis-based access token blacklist
 - Redis-backed rate limiting for public authentication endpoints
-- Tenant-scoped user registration and authentication
+- Tenant-scoped authentication and membership approval
+- Interactive OpenAPI documentation with Swagger UI
 
 ---
 
@@ -46,6 +47,9 @@ Implements JWT authentication, Role-Based Access Control (RBAC), refresh token r
 - ✅ Tenant-scoped email uniqueness
 - ✅ Support for different email domains within the same tenant
 - ✅ Tenant identification using a unique slug
+- ✅ Membership requests approved by a tenant administrator
+- ✅ Redis-backed rate limiting for authentication endpoints
+- ✅ OpenAPI documentation with Swagger UI
 - ✅ Integration tests with PostgreSQL and Redis using Testcontainers
 
 ---
@@ -132,22 +136,20 @@ Both users belong to the same tenant, even though their email domains are differ
 
 The authentication process supports automatic tenant creation and tenant-based login.
 
-### Registration and Login
+### Registration, Membership and Login
 
 ```mermaid
 flowchart TD
     A["User Registration"] --> B["Provide tenantName, email and password"]
-    B --> C{"Does tenant exist?"}
+    B --> C["Create Tenant"]
+    C --> D
+    D["Assign ADMIN role"] --> E["Create User"]
+    E --> F["Generate Access and Refresh Tokens"]
 
-    C -->|No| D["Create Tenant"]
-    D --> E["Assign ADMIN role"]
-
-    C -->|Yes| F["Assign USER role"]
-
-    E --> G["Create User"]
-    F --> G
-
-    G --> H["Generate Access and Refresh Tokens"]
+    O["Membership Request"] --> P["Provide tenantSlug, email and password"]
+    P --> Q["Store pending request"]
+    Q --> R["Tenant ADMIN approves request"]
+    R --> S["Create USER"]
 
     I["User Login"] --> J["Provide tenantSlug, email and password"]
     J --> K["Find Tenant by Slug"]
@@ -158,10 +160,10 @@ flowchart TD
 
 ### Authentication Rules
 
-1. User registers by providing an email, password, and tenant name.
-2. If the tenant does not exist, it is created automatically.
-3. The first user becomes **ADMIN**.
-4. Subsequent users registering under the same tenant become **USER**.
+1. Registration creates a new tenant and its initial **ADMIN** user.
+2. Registering a tenant name that already exists is rejected.
+3. To join an existing tenant, a person submits a membership request with its slug.
+4. An **ADMIN** of that tenant approves the request, creating the **USER** account.
 5. The tenant is identified during login using its unique slug.
 6. JWT tokens include the user's `tenantId`.
 7. Authenticated requests use the JWT to establish the tenant context and validate access.
@@ -244,6 +246,14 @@ The API is available at:
 http://localhost:8080
 ```
 
+Interactive API documentation is available at:
+
+```text
+http://localhost:8080/swagger-ui/index.html
+```
+
+The OpenAPI specification is exposed at `/v3/api-docs`.
+
 Docker Compose exposes only the API port. PostgreSQL and Redis communicate with
 the application through the internal service names `db` and `redis`; access the
 database for diagnostics with `docker compose exec db psql -U auth -d authdb`.
@@ -300,7 +310,8 @@ SPRING_PROFILES_ACTIVE=prod
 POST /auth/register
 ```
 
-Creates a new user. If the tenant does not exist, it is created automatically.
+Creates a new tenant and its initial administrator. A request using an existing
+tenant name is rejected; use the membership-request flow to join that tenant.
 
 Example:
 
@@ -362,6 +373,39 @@ Example:
 
 Returns `204 No Content` when logout succeeds.
 
+#### Request Membership
+
+```http
+POST /auth/membership-requests
+```
+
+Creates a pending request to join an existing tenant and returns `202 Accepted`.
+
+```json
+{
+  "tenantSlug": "empresa-a",
+  "email": "user@example.com",
+  "password": "Password123"
+}
+```
+
+#### Manage Membership Requests
+
+Both endpoints require an access token belonging to an **ADMIN** of the current
+tenant.
+
+```http
+GET /tenants/membership-requests
+Authorization: Bearer <access_token>
+```
+
+```http
+POST /tenants/membership-requests/{requestId}/approve
+Authorization: Bearer <access_token>
+```
+
+Approving a request creates the `USER` account and returns `204 No Content`.
+
 ---
 
 ## 🔒 Protected Routes
@@ -389,6 +433,7 @@ Current migrations:
 - `V4__associate_roles_permissions.sql`
 - `V5__hash_refresh_tokens.sql`
 - `V6__composite_unique_user_email_tenant.sql`
+- `V7__add_membership_requests.sql`
 
 ---
 
@@ -414,12 +459,15 @@ Integration tests validate:
 - Tenant isolation.
 - Same email address across different tenants.
 - Different email domains within the same tenant.
+- Membership request and approval flow.
+- Rate limiting of public authentication endpoints.
+- OpenAPI documentation availability without authentication.
 - Stateless HTTP session behavior.
 
 Latest verification:
 
 ```text
-Tests run: 23
+Tests run: 35
 Failures: 0
 Errors: 0
 Skipped: 0
@@ -455,11 +503,9 @@ src/main/java/com/auth/authservice
 
 - OAuth2 / OpenID Connect
 - API Gateway integration
-- Rate limiting
 - Audit logs
 - Distributed tracing
 - Custom tenant domains
-- Tenant invitation and membership management
 
 ---
 

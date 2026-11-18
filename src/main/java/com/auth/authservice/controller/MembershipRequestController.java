@@ -15,9 +15,15 @@ import com.auth.authservice.dto.MembershipRequestResponse;
 import com.auth.authservice.security.TenantContext;
 import com.auth.authservice.service.MembershipRequestService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/tenants/membership-requests")
 @PreAuthorize("hasRole('ADMIN')")
+@Tag(name = "Tenant membership", description = "Administrative membership request operations")
+@SecurityRequirement(name = "bearerAuth")
 public class MembershipRequestController {
     private final MembershipRequestService membershipRequestService;
 
@@ -26,11 +32,13 @@ public class MembershipRequestController {
     }
 
     @GetMapping
+    @Operation(summary = "List pending membership requests for the current tenant")
     public List<MembershipRequestResponse> list() {
         return membershipRequestService.listForTenant(TenantContext.require());
     }
 
     @PostMapping("/{requestId}/approve")
+    @Operation(summary = "Approve a pending membership request")
     public ResponseEntity<Void> approve(@PathVariable UUID requestId) {
         membershipRequestService.approve(requestId, TenantContext.require());
         return ResponseEntity.noContent().build();

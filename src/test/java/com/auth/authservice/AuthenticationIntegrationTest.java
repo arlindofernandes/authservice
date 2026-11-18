@@ -228,6 +228,12 @@ class AuthenticationIntegrationTest {
         }
 
         @Test
+        void exposesOpenApiDocumentationWithoutAuthentication() throws Exception {
+                mockMvc.perform(get("/v3/api-docs"))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
         void preventsRegistrationInAnExistingTenantWithAnotherEmailDomain() throws Exception {
                 register("admin@acme.test", "AdminSecret123", "Acme");
 

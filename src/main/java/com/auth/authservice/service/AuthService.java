@@ -71,7 +71,7 @@ public class AuthService {
                 }
 
                 // Registration bootstraps a new tenant. Joining an existing tenant
-                // must be performed by an explicit membership flow (for example, invitation).
+                // must use the membership request and administrator approval flow.
                 Tenant tenant = new Tenant();
                 tenant.setName(request.getTenantName());
                 tenant.setDomain(domain);
