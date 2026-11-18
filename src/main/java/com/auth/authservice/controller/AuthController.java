@@ -11,10 +11,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.auth.authservice.dto.AuthResponse;
 import com.auth.authservice.dto.LoginRequest;
+import com.auth.authservice.dto.MembershipRequestCreateRequest;
+import com.auth.authservice.dto.MembershipRequestResponse;
 import com.auth.authservice.dto.RefreshRequest;
 import com.auth.authservice.dto.RegisterRequest;
 import com.auth.authservice.security.TenantContext;
 import com.auth.authservice.service.AuthService;
+import com.auth.authservice.service.MembershipRequestService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -24,9 +27,11 @@ import jakarta.validation.Valid;
 public class AuthController {
 
     private final AuthService authService;
+    private final MembershipRequestService membershipRequestService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, MembershipRequestService membershipRequestService) {
         this.authService = authService;
+        this.membershipRequestService = membershipRequestService;
     }
 
     @PostMapping("/register")
@@ -46,6 +51,12 @@ public class AuthController {
     @PostMapping("/refresh")
     public AuthResponse refresh(@Valid @RequestBody RefreshRequest request) {
         return authService.refreshToken(request);
+    }
+
+    @PostMapping("/membership-requests")
+    public ResponseEntity<MembershipRequestResponse> requestMembership(
+            @Valid @RequestBody MembershipRequestCreateRequest request) {
+        return ResponseEntity.accepted().body(membershipRequestService.requestMembership(request));
     }
 
     @PostMapping("/logout")

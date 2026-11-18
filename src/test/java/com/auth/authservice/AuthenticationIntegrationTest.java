@@ -76,45 +76,44 @@ class AuthenticationIntegrationTest {
         @Test
         void authenticatesRolesRotatesRefreshTokensAndInvalidatesLoggedOutTokens() throws Exception {
                 JsonNode admin = register("admin@acme.test", "AdminSecret123", "Acme");
-                JsonNode user = register("user@acme.test", "UserSecret123", "Acme");
 
                 String adminAccessToken = requireNonNull(admin.required("accessToken").asText());
                 String adminRefreshToken = requireNonNull(admin.required("refreshToken").asText());
-                String userAccessToken = requireNonNull(user.required("accessToken").asText());
-                String oldUserRefreshToken = requireNonNull(user.required("refreshToken").asText());
 
                 mockMvc.perform(get("/api/admin").header("Authorization", "Bearer " + adminAccessToken))
                                 .andExpect(status().isOk());
-                mockMvc.perform(get("/api/user").header("Authorization", "Bearer " + userAccessToken))
-                                .andExpect(status().isOk());
-                mockMvc.perform(get("/api/admin").header("Authorization", "Bearer " + userAccessToken))
+                mockMvc.perform(get("/api/user").header("Authorization", "Bearer " + adminAccessToken))
                                 .andExpect(status().isForbidden());
 
-                JsonNode rotated = refresh(oldUserRefreshToken, status().isOk());
-                assertThat(rotated.required("refreshToken").asText()).isNotEqualTo(oldUserRefreshToken);
-
-                refresh(oldUserRefreshToken, status().isUnauthorized());
+                JsonNode rotated = refresh(adminRefreshToken, status().isOk());
+                assertThat(rotated.required("refreshToken").asText()).isNotEqualTo(adminRefreshToken);
 
                 Integer rawTokenRows = jdbcTemplate.queryForObject(
                                 "select count(*) from refresh_token where token_hash = ?", Integer.class,
-                                oldUserRefreshToken);
+                                adminRefreshToken);
                 Integer hashedTokenRows = jdbcTemplate.queryForObject(
                                 "select count(*) from refresh_token where length(token_hash) = 64", Integer.class);
                 assertThat(rawTokenRows).isZero();
-                assertThat(hashedTokenRows).isGreaterThanOrEqualTo(3);
+                assertThat(hashedTokenRows).isGreaterThanOrEqualTo(2);
+
+                String rotatedRefreshToken = rotated.required("refreshToken").asText();
+                String rotatedAccessToken = rotated.required("accessToken").asText();
 
                 mockMvc.perform(post("/auth/logout")
-                                .header("Authorization", "Bearer " + adminAccessToken)
+                                .header("Authorization", "Bearer " + rotatedAccessToken)
                                 .contentType("application/json")
                                 .content(requireNonNull(objectMapper.writeValueAsString(
-                                                Map.of("refreshToken", adminRefreshToken)))))
+                                                Map.of("refreshToken", rotatedRefreshToken)))))
                                 .andExpect(status().isNoContent());
 
-                // O refresh token revogado não pode ser reutilizado.
+                // Um token já rotacionado não pode ser reutilizado.
                 refresh(adminRefreshToken, status().isUnauthorized());
 
+                // O refresh token revogado não pode ser reutilizado.
+                refresh(requireNonNull(rotatedRefreshToken), status().isUnauthorized());
+
                 // O access token também não pode mais ser utilizado.
-                mockMvc.perform(get("/api/admin").header("Authorization", "Bearer " + adminAccessToken))
+                mockMvc.perform(get("/api/admin").header("Authorization", "Bearer " + rotatedAccessToken))
                                 .andExpect(status().isUnauthorized());
         }
 
@@ -192,7 +191,7 @@ class AuthenticationIntegrationTest {
         }
 
         @Test
-        void preventsDuplicateEmailWithinSameTenant() throws Exception {
+        void preventsRegistrationInAnExistingTenant() throws Exception {
                 register(
                                 "admin@company.test",
                                 "Password123",
@@ -217,23 +216,122 @@ class AuthenticationIntegrationTest {
         }
 
         @Test
-        void allowsDifferentEmailDomainsWithinSameTenant() throws Exception {
+        void preventsRegistrationInAnExistingTenantWithAnotherEmailDomain() throws Exception {
                 register("admin@acme.test", "AdminSecret123", "Acme");
 
-                JsonNode user = register(
-                                "user@gmail.com",
-                                "UserSecret123",
-                                "Acme");
+                mockMvc.perform(post("/auth/register")
+                                .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                                .content(requireNonNull(objectMapper.writeValueAsString(Map.of(
+                                                "email", "user@gmail.com",
+                                                "password", "UserSecret123",
+                                                "tenantName", "Acme")))))
+                                .andExpect(status().isConflict());
+        }
 
-                assertThat(user.hasNonNull("accessToken")).isTrue();
-                assertThat(user.hasNonNull("refreshToken")).isTrue();
+        @Test
+        void createsUsersOnlyAfterTheirMembershipRequestIsApprovedByATenantAdmin() throws Exception {
+                JsonNode admin = register("admin@acme.test", "AdminSecret123", "Acme");
+                String adminAccessToken = admin.required("accessToken").asText();
 
-                Integer userCount = jdbcTemplate.queryForObject(
-                                "SELECT COUNT(*) FROM users WHERE tenant_id = "
-                                                + "(SELECT id FROM tenant WHERE name = ?)",
-                                Integer.class,
-                                "Acme");
+                MvcResult requestResult = mockMvc.perform(post("/auth/membership-requests")
+                                .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                                .content(requireNonNull(objectMapper.writeValueAsString(Map.of(
+                                                "tenantSlug", "acme",
+                                                "email", "member@example.test",
+                                                "password", "MemberSecret123")))))
+                                .andExpect(status().isAccepted())
+                                .andReturn();
+                JsonNode membershipRequest = objectMapper.readTree(requestResult.getResponse().getContentAsString());
+                String requestId = membershipRequest.required("id").asText();
 
-                assertThat(userCount).isEqualTo(2);
+                String storedPassword = jdbcTemplate.queryForObject(
+                                "SELECT password FROM membership_request WHERE id = ?::uuid",
+                                String.class,
+                                requestId);
+                assertThat(storedPassword).startsWith("$2").isNotEqualTo("MemberSecret123");
+
+                login("acme", "member@example.test", "MemberSecret123", status().isUnauthorized());
+
+                mockMvc.perform(get("/tenants/membership-requests")
+                                .header("Authorization", "Bearer " + adminAccessToken))
+                                .andExpect(status().isOk())
+                                .andExpect(result -> assertThat(objectMapper.readTree(
+                                                result.getResponse().getContentAsString()))
+                                                .extracting(node -> node.required("id").asText())
+                                                .containsExactly(requestId));
+
+                mockMvc.perform(post("/tenants/membership-requests/{requestId}/approve", requestId)
+                                .header("Authorization", "Bearer " + adminAccessToken))
+                                .andExpect(status().isNoContent());
+
+                JsonNode member = login("acme", "member@example.test", "MemberSecret123", status().isOk());
+                String memberAccessToken = member.required("accessToken").asText();
+                mockMvc.perform(get("/api/user").header("Authorization", "Bearer " + memberAccessToken))
+                                .andExpect(status().isOk());
+                mockMvc.perform(get("/api/admin").header("Authorization", "Bearer " + memberAccessToken))
+                                .andExpect(status().isForbidden());
+                mockMvc.perform(get("/tenants/membership-requests")
+                                .header("Authorization", "Bearer " + memberAccessToken))
+                                .andExpect(status().isForbidden());
+        }
+
+        @Test
+        void rejectsDuplicateMembershipRequests() throws Exception {
+                register("admin@acme.test", "AdminSecret123", "Acme");
+                String body = requireNonNull(objectMapper.writeValueAsString(Map.of(
+                                "tenantSlug", "acme",
+                                "email", "member@example.test",
+                                "password", "MemberSecret123")));
+
+                mockMvc.perform(post("/auth/membership-requests")
+                                .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                                .content(body))
+                                .andExpect(status().isAccepted());
+                mockMvc.perform(post("/auth/membership-requests")
+                                .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                                .content(body))
+                                .andExpect(status().isConflict());
+        }
+
+        @Test
+        void preventsAnAdminFromApprovingAnotherTenantsMembershipRequest() throws Exception {
+                JsonNode acmeAdmin = register("admin@acme.test", "AdminSecret123", "Acme");
+                JsonNode betaAdmin = register("admin@beta.test", "BetaSecret123", "Beta");
+
+                MvcResult requestResult = mockMvc.perform(post("/auth/membership-requests")
+                                .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                                .content(requireNonNull(objectMapper.writeValueAsString(Map.of(
+                                                "tenantSlug", "acme",
+                                                "email", "member@example.test",
+                                                "password", "MemberSecret123")))))
+                                .andExpect(status().isAccepted())
+                                .andReturn();
+                String requestId = objectMapper.readTree(requestResult.getResponse().getContentAsString())
+                                .required("id").asText();
+
+                mockMvc.perform(post("/tenants/membership-requests/{requestId}/approve", requestId)
+                                .header("Authorization", "Bearer " + betaAdmin.required("accessToken").asText()))
+                                .andExpect(status().isNotFound());
+
+                mockMvc.perform(get("/tenants/membership-requests")
+                                .header("Authorization", "Bearer " + acmeAdmin.required("accessToken").asText()))
+                                .andExpect(status().isOk())
+                                .andExpect(result -> assertThat(objectMapper.readTree(
+                                                result.getResponse().getContentAsString()))
+                                                .extracting(node -> node.required("id").asText())
+                                                .containsExactly(requestId));
+        }
+
+        private JsonNode login(@NonNull String tenantSlug, @NonNull String email, @NonNull String password,
+                        @NonNull ResultMatcher expectedStatus) throws Exception {
+                MvcResult result = mockMvc.perform(post("/auth/login")
+                                .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                                .content(requireNonNull(objectMapper.writeValueAsString(Map.of(
+                                                "tenantSlug", tenantSlug,
+                                                "email", email,
+                                                "password", password)))))
+                                .andExpect(expectedStatus)
+                                .andReturn();
+                return objectMapper.readTree(result.getResponse().getContentAsString());
         }
 }

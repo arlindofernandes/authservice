@@ -39,11 +39,25 @@ public class ApiExceptionHandler {
         return response(HttpStatus.BAD_REQUEST, "Malformed request body", request, Map.of());
     }
 
-    @ExceptionHandler(EmailAlreadyRegisteredException.class)
+    @ExceptionHandler({ EmailAlreadyRegisteredException.class, TenantAlreadyExistsException.class })
     public ResponseEntity<ApiError> handleDuplicateEmail(
-            EmailAlreadyRegisteredException exception,
+            RuntimeException exception,
             HttpServletRequest request) {
         return response(HttpStatus.CONFLICT, exception.getMessage(), request, Map.of());
+    }
+
+    @ExceptionHandler(MembershipRequestAlreadyExistsException.class)
+    public ResponseEntity<ApiError> handleDuplicateMembershipRequest(
+            MembershipRequestAlreadyExistsException exception,
+            HttpServletRequest request) {
+        return response(HttpStatus.CONFLICT, exception.getMessage(), request, Map.of());
+    }
+
+    @ExceptionHandler(MembershipRequestNotFoundException.class)
+    public ResponseEntity<ApiError> handleMissingMembershipRequest(
+            MembershipRequestNotFoundException exception,
+            HttpServletRequest request) {
+        return response(HttpStatus.NOT_FOUND, exception.getMessage(), request, Map.of());
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

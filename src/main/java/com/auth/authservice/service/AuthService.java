@@ -18,8 +18,8 @@ import com.auth.authservice.dto.RegisterRequest;
 import com.auth.authservice.entity.Role;
 import com.auth.authservice.entity.Tenant;
 import com.auth.authservice.entity.User;
-import com.auth.authservice.exception.EmailAlreadyRegisteredException;
 import com.auth.authservice.exception.InvalidCredentialsException;
+import com.auth.authservice.exception.TenantAlreadyExistsException;
 import com.auth.authservice.repository.RoleRepository;
 import com.auth.authservice.repository.TenantRepository;
 import com.auth.authservice.repository.UserRepository;
@@ -66,29 +66,20 @@ public class AuthService {
         public AuthResponse register(RegisterRequest request) {
 
                 String domain = request.getEmail().substring(request.getEmail().indexOf("@") + 1);
-                Tenant tenant = tenantRepository
-                                .findByName(request.getTenantName())
-                                .orElse(null);
-                Role role;
-                if (tenant == null) {
-                        // PRIMEIRO USUÁRIO É ADMIN → CRIA TENANT
-                        tenant = new Tenant();
-                        tenant.setName(request.getTenantName());
-                        tenant.setDomain(domain);
-                        tenant.setSlug(generateUniqueSlug(request.getTenantName()));
-
-                        tenantRepository.save(tenant);
-                        role = roleRepository.findByName("ADMIN")
-                                        .orElseThrow();
-                } else {
-
-                        // USUÁRIOS POSTERIORES → USER
-                        role = roleRepository.findByName("USER")
-                                        .orElseThrow();
+                if (tenantRepository.findByName(request.getTenantName()).isPresent()) {
+                        throw new TenantAlreadyExistsException();
                 }
-                if (userRepository.findByEmailAndTenantId(request.getEmail(), tenant.getId()).isPresent()) {
-                        throw new EmailAlreadyRegisteredException();
-                }
+
+                // Registration bootstraps a new tenant. Joining an existing tenant
+                // must be performed by an explicit membership flow (for example, invitation).
+                Tenant tenant = new Tenant();
+                tenant.setName(request.getTenantName());
+                tenant.setDomain(domain);
+                tenant.setSlug(generateUniqueSlug(request.getTenantName()));
+
+                tenantRepository.save(tenant);
+                Role role = roleRepository.findByName("ADMIN")
+                                .orElseThrow();
 
                 User user = new User();
                 user.setEmail(request.getEmail());

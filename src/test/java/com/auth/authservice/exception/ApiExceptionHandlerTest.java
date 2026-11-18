@@ -28,6 +28,18 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    void returnsAConflictResponseWhenATenantAlreadyExists() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/auth/register");
+
+        ResponseEntity<ApiError> response = new ApiExceptionHandler()
+                .handleDuplicateEmail(new TenantAlreadyExistsException(), request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(requireNonNull(response.getBody()).message())
+                .contains("Existing tenants require an invitation");
+    }
+
+    @Test
     void returnsAConflictResponseForDatabaseUniquenessViolations() {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/auth/register");
 
