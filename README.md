@@ -222,15 +222,29 @@ Refresh token reuse detection prevents previously rotated tokens from being reus
 
 ### Run with Docker
 
+Create the local environment file and generate a JWT signing secret:
+
 ```bash
-docker compose up -d --build
+cp .env.example .env
+openssl rand -base64 32
 ```
 
-The API will be available at:
+Set the generated value in `JWT_SECRET` in `.env`, then start the stack:
+
+```bash
+docker compose up --build -d
+docker compose logs -f auth-service
+```
+
+The API is available at:
 
 ```text
 http://localhost:8080
 ```
+
+Docker Compose exposes only the API port. PostgreSQL and Redis communicate with
+the application through the internal service names `db` and `redis`; access the
+database for diagnostics with `docker compose exec db psql -U auth -d authdb`.
 
 ---
 
@@ -241,6 +255,7 @@ Create a `.env` file in the project root.
 ```env
 SPRING_PROFILES_ACTIVE=prod
 
+DB_NAME=authdb
 DB_URL=jdbc:postgresql://db:5432/authdb
 DB_USER=auth
 DB_PASSWORD=auth
@@ -248,11 +263,13 @@ DB_PASSWORD=auth
 REDIS_HOST=redis
 REDIS_PORT=6379
 
-JWT_SECRET=your_secret_key_here
+JWT_SECRET=<output of openssl rand -base64 32>
 JWT_EXPIRATION=900000
 ```
 
-**Important:** Replace the example JWT secret with a strong, securely generated secret before deploying the application.
+`DB_URL`, `REDIS_HOST` and `REDIS_PORT` use Docker Compose internal networking.
+For a local process started outside Docker, use `localhost` instead. The
+application runs Flyway automatically at startup after PostgreSQL becomes healthy.
 
 ---
 
