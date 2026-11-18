@@ -322,6 +322,18 @@ class AuthenticationIntegrationTest {
                                                 .containsExactly(requestId));
         }
 
+        @Test
+        void rejectsLoginAndExistingJwtAfterAUserIsDisabled() throws Exception {
+                JsonNode admin = register("admin@acme.test", "AdminSecret123", "Acme");
+                String accessToken = admin.required("accessToken").asText();
+
+                jdbcTemplate.update("UPDATE users SET enabled = false WHERE email = ?", "admin@acme.test");
+
+                login("acme", "admin@acme.test", "AdminSecret123", status().isUnauthorized());
+                mockMvc.perform(get("/api/admin").header("Authorization", "Bearer " + accessToken))
+                                .andExpect(status().isUnauthorized());
+        }
+
         private JsonNode login(@NonNull String tenantSlug, @NonNull String email, @NonNull String password,
                         @NonNull ResultMatcher expectedStatus) throws Exception {
                 MvcResult result = mockMvc.perform(post("/auth/login")

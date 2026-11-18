@@ -33,6 +33,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                                 .builder()
                                 .username(user.getEmail())
                                 .password(user.getPassword())
+                                .disabled(!user.isEnabled())
                                 .authorities(
                                                 Stream.concat(
                                                                 user.getRoles().stream()

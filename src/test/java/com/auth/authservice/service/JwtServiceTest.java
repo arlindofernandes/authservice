@@ -147,4 +147,25 @@ class JwtServiceTest {
                 assertThat(jwtService.isTokenValid(token, userDetails, expectedTenantId))
                                 .isFalse();
         }
+
+	@Test
+	void shouldRejectTokenForDisabledUser() {
+		UUID tenantId = UUID.randomUUID();
+		String token = Jwts.builder()
+				.setSubject("user@example.com")
+				.claim("tenantId", tenantId.toString())
+				.setIssuedAt(new Date())
+				.setExpiration(new Date(System.currentTimeMillis() + 3600000))
+				.signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secret)))
+				.compact();
+
+		var disabledUser = org.springframework.security.core.userdetails.User
+				.withUsername("user@example.com")
+				.password("password")
+				.authorities("ROLE_USER")
+				.disabled(true)
+				.build();
+
+		assertThat(jwtService.isTokenValid(token, disabledUser, tenantId)).isFalse();
+	}
 }

@@ -81,6 +81,10 @@ public class JwtService {
         return email != null
                 && email.equals(userDetails.getUsername())
                 && tokenTenantId.equals(expectedTenantId)
+                && userDetails.isEnabled()
+                && userDetails.isAccountNonExpired()
+                && userDetails.isAccountNonLocked()
+                && userDetails.isCredentialsNonExpired()
                 && expiration != null
                 && expiration.after(new Date());
     }

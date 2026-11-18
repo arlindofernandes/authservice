@@ -55,4 +55,31 @@ class CustomUserDetailsServiceTest {
                 .extracting(authority -> authority.getAuthority())
                 .containsExactlyInAnyOrder("ROLE_USER", "USER_READ");
     }
+
+    @Test
+    void exposesThePersistedEnabledState() {
+        UUID tenantId = UUID.randomUUID();
+        TenantContext.set(tenantId);
+
+        User user = new User();
+        user.setEmail("disabled@example.com");
+        user.setPassword("encoded-password");
+        user.setEnabled(false);
+        user.setRoles(Set.of());
+
+        UserRepository userRepository = (UserRepository) Proxy.newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[] { UserRepository.class },
+                (proxy, method, args) -> {
+                    if (method.getName().equals("findByEmailAndTenantId")) {
+                        return java.util.Optional.of(user);
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+
+        UserDetails details = new CustomUserDetailsService(userRepository)
+                .loadUserByUsername("disabled@example.com");
+
+        assertThat(details.isEnabled()).isFalse();
+    }
 }
