@@ -245,6 +245,15 @@ docker compose up --build -d
 docker compose logs -f auth-service
 ```
 
+Compose is intended for development. Its image runs with a JRE as a non-root
+user and uses development resource limits. For deployment, publish the image
+with an immutable version tag (for example, `registry.example/auth-service:1.2.0`)
+and set `AUTH_SERVICE_IMAGE` to that tag in Kubernetes, ECS, or your VM runtime.
+
+The GitHub Actions pipeline runs `clean verify`, CodeQL analysis, and a Trivy
+image scan on every push and pull request. Pushing a tag such as `v1.2.0`
+publishes immutable image tags to GitHub Container Registry (`ghcr.io`).
+
 The API is available at:
 
 ```text
@@ -280,7 +289,19 @@ service generates one and includes it in its logs and response.
 
 Application logs are emitted as JSON and include the request correlation data.
 Prometheus metrics are available at `/actuator/prometheus` with the
-`X-Admin-Token` header; do not expose that endpoint publicly.
+`X-Admin-Token` header; do not expose that endpoint publicly. In addition to
+JVM and HTTP metrics, it exposes successful and failed logins, refresh-token
+reuse, rejected rate-limit requests, and the current number of pending
+membership requests.
+
+The database pool and network timeouts are configured through `DB_POOL_*`,
+`DB_*_TIMEOUT_MS`, `REDIS_*_TIMEOUT_MS`, and `HTTP_CONNECTION_TIMEOUT_MS`.
+Their development defaults are conservative; size the database pool according
+to the connection limit of the production PostgreSQL instance.
+
+Distributed traces use OpenTelemetry over OTLP. In production, configure
+`OTLP_TRACING_ENDPOINT` to point to an OpenTelemetry Collector and choose the
+sampling rate with `TRACING_SAMPLING_PROBABILITY`.
 
 Docker Compose exposes only the API port. PostgreSQL and Redis communicate with
 the application through the internal service names `db` and `redis`; access the

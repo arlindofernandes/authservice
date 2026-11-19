@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,7 @@ public class AuthService {
         private final UserRepository userRepository;
         private final RoleRepository roleRepository;
         private final PasswordEncoder passwordEncoder;
+        private final AuthMetrics authMetrics;
         long expiration;
 
         public AuthService(AuthenticationManager authenticationManager,
@@ -47,7 +49,8 @@ public class AuthService {
                         TenantRepository tenantRepository,
                         UserRepository userRepository,
                         RoleRepository roleRepository,
-                        PasswordEncoder passwordEncoder
+                        PasswordEncoder passwordEncoder,
+                        AuthMetrics authMetrics
 
         ) {
                 this.authenticationManager = authenticationManager;
@@ -58,6 +61,7 @@ public class AuthService {
                 this.userRepository = userRepository;
                 this.roleRepository = roleRepository;
                 this.passwordEncoder = passwordEncoder;
+                this.authMetrics = authMetrics;
 
                 expiration = jwtService.getExpiration() / 1000; // Convert to seconds
         }
@@ -106,11 +110,10 @@ public class AuthService {
                                 .trim()
                                 .toLowerCase(Locale.ROOT);
 
-                Tenant tenant = tenantRepository
-                                .findBySlug(tenantSlug)
-                                .orElseThrow(InvalidCredentialsException::new);
-
                 try {
+                        Tenant tenant = tenantRepository
+                                        .findBySlug(tenantSlug)
+                                        .orElseThrow(InvalidCredentialsException::new);
                         TenantContext.set(tenant.getId());
 
                         authenticationManager.authenticate(
@@ -126,6 +129,7 @@ public class AuthService {
 
                         String accessToken = jwtService.generateToken(user);
                         String refreshToken = refreshTokenService.createRefreshToken(user);
+                        authMetrics.recordSuccessfulLogin();
 
                         return new AuthResponse(
                                         accessToken,
@@ -133,6 +137,9 @@ public class AuthService {
                                         "Bearer",
                                         expiration);
 
+                } catch (AuthenticationException | InvalidCredentialsException exception) {
+                        authMetrics.recordFailedLogin();
+                        throw exception;
                 } finally {
                         TenantContext.clear();
                 }

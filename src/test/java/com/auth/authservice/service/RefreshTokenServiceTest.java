@@ -13,13 +13,16 @@ import com.auth.authservice.entity.RefreshToken;
 import com.auth.authservice.entity.User;
 import com.auth.authservice.repository.RefreshTokenRepository;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 class RefreshTokenServiceTest {
 
     @Test
     void rotatesATokenWithoutPersistingItsRawValue() {
         List<RefreshToken> savedTokens = new ArrayList<>();
         RefreshTokenRepository repository = repository(savedTokens);
-        RefreshTokenService service = new RefreshTokenService(repository);
+        AuthMetrics authMetrics = new AuthMetrics(new SimpleMeterRegistry(), membershipRequestRepository());
+        RefreshTokenService service = new RefreshTokenService(repository, authMetrics);
         User user = user();
 
         String originalRawToken = service.createRefreshToken(user);
@@ -34,6 +37,18 @@ class RefreshTokenServiceTest {
         assertThat(rotated.token()).isNotEqualTo(originalRawToken);
         assertThat(savedTokens).hasSize(2);
         assertThat(rotated.token()).isNotEqualTo(savedTokens.get(1).getTokenHash());
+    }
+
+    private com.auth.authservice.repository.MembershipRequestRepository membershipRequestRepository() {
+        return (com.auth.authservice.repository.MembershipRequestRepository) Proxy.newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[] { com.auth.authservice.repository.MembershipRequestRepository.class },
+                (proxy, method, args) -> {
+                    if (method.getName().equals("count")) {
+                        return 0L;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
     }
 
     private RefreshTokenRepository repository(List<RefreshToken> savedTokens) {

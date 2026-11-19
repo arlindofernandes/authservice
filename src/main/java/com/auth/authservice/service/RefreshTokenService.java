@@ -21,9 +21,11 @@ public class RefreshTokenService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final RefreshTokenRepository repository;
+    private final AuthMetrics authMetrics;
 
-    public RefreshTokenService(RefreshTokenRepository repository) {
+    public RefreshTokenService(RefreshTokenRepository repository, AuthMetrics authMetrics) {
         this.repository = repository;
+        this.authMetrics = authMetrics;
     }
 
     public String createRefreshToken(User user) {
@@ -45,6 +47,7 @@ public class RefreshTokenService {
 
         if (token.isUsed() || token.isRevoked()) {
             revokeAllUserTokens(token.getUser());
+            authMetrics.recordRefreshReuse();
             throw new RefreshTokenValidationException("Refresh token reuse detected");
         }
 

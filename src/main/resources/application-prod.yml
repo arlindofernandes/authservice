@@ -25,3 +25,8 @@ jwt:
 admin:
   registration:
     token: ${ADMIN_REGISTRATION_TOKEN}
+
+management:
+  otlp:
+    tracing:
+      endpoint: ${OTLP_TRACING_ENDPOINT}

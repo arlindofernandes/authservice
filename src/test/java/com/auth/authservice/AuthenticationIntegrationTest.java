@@ -275,6 +275,20 @@ class AuthenticationIntegrationTest {
         }
 
         @Test
+        void exposesAuthenticationSecurityMetrics() throws Exception {
+                register("admin@acme.test", "AdminSecret123", "Acme");
+                login("acme", "admin@acme.test", "AdminSecret123", status().isOk());
+                login("acme", "admin@acme.test", "wrong-password", status().isUnauthorized());
+
+                mockMvc.perform(get("/actuator/prometheus")
+                                .header("X-Admin-Token", "local-development-admin-token"))
+                                .andExpect(status().isOk())
+                                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                                                .contains("auth_logins_success_total", "auth_logins_failed_total",
+                                                                "auth_membership_pending"));
+        }
+
+        @Test
         void exposesUnauthenticatedLivenessAndReadinessProbes() throws Exception {
                 mockMvc.perform(get("/actuator/health/liveness"))
                                 .andExpect(status().isOk());
