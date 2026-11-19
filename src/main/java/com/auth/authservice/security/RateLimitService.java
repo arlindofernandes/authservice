@@ -6,7 +6,7 @@ import java.util.List;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -26,7 +26,6 @@ public class RateLimitService {
         this.redisTemplate = redisTemplate;
     }
 
-    @SuppressWarnings("null") // Spring's @NonNull metadata is not type-use compatible with Eclipse JDT.
     public boolean isAllowed(String bucket, String clientAddress, int maxRequests, Duration window) {
         String key = "rate-limit:" + bucket + ":" + clientAddress;
         Long count = redisTemplate.execute(
