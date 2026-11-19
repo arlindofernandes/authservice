@@ -14,6 +14,8 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
@@ -26,7 +28,7 @@ class RateLimitFilterTest {
     @BeforeEach
     void setUp() {
         rateLimitService = mock(RateLimitService.class);
-        filter = new RateLimitFilter(rateLimitService, new ObjectMapper().findAndRegisterModules());
+        filter = new RateLimitFilter(rateLimitService, new ObjectMapper().findAndRegisterModules(), new SimpleMeterRegistry());
     }
 
     @Test

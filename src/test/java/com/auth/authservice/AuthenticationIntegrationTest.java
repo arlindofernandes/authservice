@@ -32,7 +32,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Testcontainers
-@SpringBootTest
+@SpringBootTest(properties = "management.defaults.metrics.export.enabled=true")
 @AutoConfigureMockMvc
 class AuthenticationIntegrationTest {
 
@@ -249,12 +249,29 @@ class AuthenticationIntegrationTest {
         }
 
         @Test
+        void returnsTheSuppliedRequestIdForRequestCorrelation() throws Exception {
+                mockMvc.perform(get("/v3/api-docs").header("X-Request-Id", "gateway-request-123"))
+                                .andExpect(status().isOk())
+                                .andExpect(result -> assertThat(result.getResponse().getHeader("X-Request-Id"))
+                                                .isEqualTo("gateway-request-123"));
+        }
+
+        @Test
         void exposesPublicJwksForOtherMicroservicesToVerifyTokens() throws Exception {
                 mockMvc.perform(get("/.well-known/jwks.json"))
                                 .andExpect(status().isOk())
                                 .andExpect(result -> assertThat(objectMapper.readTree(
                                                 result.getResponse().getContentAsString()).at("/keys/0/kty").asText())
                                                 .isEqualTo("RSA"));
+        }
+
+        @Test
+        void exposesPrometheusMetricsOnlyWithPlatformAdminToken() throws Exception {
+                mockMvc.perform(get("/actuator/prometheus"))
+                                .andExpect(status().isUnauthorized());
+                mockMvc.perform(get("/actuator/prometheus")
+                                .header("X-Admin-Token", "local-development-admin-token"))
+                                .andExpect(status().isOk());
         }
 
         @Test

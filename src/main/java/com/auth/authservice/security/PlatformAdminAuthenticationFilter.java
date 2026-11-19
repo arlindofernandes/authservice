@@ -28,6 +28,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class PlatformAdminAuthenticationFilter extends OncePerRequestFilter {
     static final String ADMIN_TOKEN_HEADER = "X-Admin-Token";
     private static final String ADMIN_TENANTS_PATH = "/admin/tenants";
+    private static final String PROMETHEUS_PATH = "/actuator/prometheus";
 
     private final AdminRegistrationProperties properties;
     private final ObjectMapper objectMapper;
@@ -39,7 +40,9 @@ public class PlatformAdminAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
-        return !"POST".equals(request.getMethod()) || !ADMIN_TENANTS_PATH.equals(request.getRequestURI());
+        boolean createsTenant = "POST".equals(request.getMethod()) && ADMIN_TENANTS_PATH.equals(request.getRequestURI());
+        boolean readsMetrics = "GET".equals(request.getMethod()) && PROMETHEUS_PATH.equals(request.getRequestURI());
+        return !createsTenant && !readsMetrics;
     }
 
     @Override

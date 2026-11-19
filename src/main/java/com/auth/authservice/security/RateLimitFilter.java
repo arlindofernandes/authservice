@@ -11,6 +11,9 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 import com.auth.authservice.exception.ApiError;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -28,10 +31,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimitService rateLimitService;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
-    public RateLimitFilter(RateLimitService rateLimitService, ObjectMapper objectMapper) {
+    public RateLimitFilter(RateLimitService rateLimitService, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.rateLimitService = rateLimitService;
         this.objectMapper = objectMapper;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
@@ -47,12 +52,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         try {
             if (!rateLimitService.isAllowed(limit.bucket(), request.getRemoteAddr(), limit.maxRequests(), limit.window())) {
+                Counter.builder("auth.rate_limit.rejected").tag("operation", limit.bucket()).register(meterRegistry)
+                        .increment();
                 response.setHeader(HttpHeaders.RETRY_AFTER, Long.toString(limit.window().toSeconds()));
                 writeError(request, response, 429,
                         "Too Many Requests", "Too many requests. Try again later");
                 return;
             }
         } catch (RedisConnectionFailureException exception) {
+            Counter.builder("auth.rate_limit.errors").tag("operation", limit.bucket()).register(meterRegistry)
+                    .increment();
             writeError(request, response, HttpServletResponse.SC_SERVICE_UNAVAILABLE,
                     "Service Unavailable", "Rate limiting service is temporarily unavailable");
             return;

@@ -20,6 +20,7 @@ import org.springframework.security.web.context.SecurityContextHolderFilter;
 import com.auth.authservice.security.JwtAuthenticationFilter;
 import com.auth.authservice.security.PlatformAdminAuthenticationFilter;
 import com.auth.authservice.security.RateLimitFilter;
+import com.auth.authservice.security.RequestCorrelationFilter;
 import com.auth.authservice.exception.ApiError;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -31,14 +32,16 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final PlatformAdminAuthenticationFilter platformAdminAuthenticationFilter;
     private final RateLimitFilter rateLimitFilter;
+    private final RequestCorrelationFilter requestCorrelationFilter;
     private final ObjectMapper objectMapper;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
             PlatformAdminAuthenticationFilter platformAdminAuthenticationFilter, RateLimitFilter rateLimitFilter,
-            ObjectMapper objectMapper) {
+            RequestCorrelationFilter requestCorrelationFilter, ObjectMapper objectMapper) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.platformAdminAuthenticationFilter = platformAdminAuthenticationFilter;
         this.rateLimitFilter = rateLimitFilter;
+        this.requestCorrelationFilter = requestCorrelationFilter;
         this.objectMapper = objectMapper;
     }
 
@@ -70,6 +73,7 @@ public class SecurityConfig {
                             writeSecurityError(request.getRequestURI(), response, HttpServletResponse.SC_FORBIDDEN,
                                     "Forbidden", "Access is denied");
                         }))
+                .addFilterBefore(requestCorrelationFilter, SecurityContextHolderFilter.class)
                 .addFilterBefore(rateLimitFilter, SecurityContextHolderFilter.class)
                 .addFilterAfter(platformAdminAuthenticationFilter, SecurityContextHolderFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter,
