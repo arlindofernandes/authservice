@@ -131,13 +131,14 @@ class AuthenticationIntegrationTest {
 
         private JsonNode register(@NonNull String email, @NonNull String password, @NonNull String tenantName)
                         throws Exception {
-                MvcResult result = mockMvc.perform(post("/auth/register")
+                MvcResult result = mockMvc.perform(post("/admin/tenants")
+                                .header("X-Admin-Token", "local-development-admin-token")
                                 .contentType("application/json")
                                 .content(requireNonNull(objectMapper.writeValueAsString(Map.of(
                                                 "email", email,
                                                 "password", password,
                                                 "tenantName", tenantName)))))
-                                .andExpect(status().isOk())
+                                .andExpect(status().isCreated())
                                 .andReturn();
                 return objectMapper.readTree(result.getResponse().getContentAsString());
         }
@@ -209,13 +210,27 @@ class AuthenticationIntegrationTest {
                                 "Password123",
                                 "Acme");
 
-                mockMvc.perform(post("/auth/register")
+                mockMvc.perform(post("/admin/tenants")
+                                .header("X-Admin-Token", "local-development-admin-token")
                                 .contentType(requireNonNull(MediaType.APPLICATION_JSON))
                                 .content(requireNonNull(objectMapper.writeValueAsString(Map.of(
                                                 "email", "admin@company.test",
                                                 "password", "Password123",
                                                 "tenantName", "Acme")))))
                                 .andExpect(status().isConflict());
+        }
+
+        @Test
+        void rejectsPublicOrUnauthenticatedTenantRegistration() throws Exception {
+                mockMvc.perform(post("/auth/register")
+                                .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                                .content("{}"))
+                                .andExpect(status().isUnauthorized());
+
+                mockMvc.perform(post("/admin/tenants")
+                                .contentType(requireNonNull(MediaType.APPLICATION_JSON))
+                                .content("{}"))
+                                .andExpect(status().isUnauthorized());
         }
 
         @Test
@@ -234,10 +249,28 @@ class AuthenticationIntegrationTest {
         }
 
         @Test
+        void exposesPublicJwksForOtherMicroservicesToVerifyTokens() throws Exception {
+                mockMvc.perform(get("/.well-known/jwks.json"))
+                                .andExpect(status().isOk())
+                                .andExpect(result -> assertThat(objectMapper.readTree(
+                                                result.getResponse().getContentAsString()).at("/keys/0/kty").asText())
+                                                .isEqualTo("RSA"));
+        }
+
+        @Test
+        void exposesUnauthenticatedLivenessAndReadinessProbes() throws Exception {
+                mockMvc.perform(get("/actuator/health/liveness"))
+                                .andExpect(status().isOk());
+                mockMvc.perform(get("/actuator/health/readiness"))
+                                .andExpect(status().isOk());
+        }
+
+        @Test
         void preventsRegistrationInAnExistingTenantWithAnotherEmailDomain() throws Exception {
                 register("admin@acme.test", "AdminSecret123", "Acme");
 
-                mockMvc.perform(post("/auth/register")
+                mockMvc.perform(post("/admin/tenants")
+                                .header("X-Admin-Token", "local-development-admin-token")
                                 .contentType(requireNonNull(MediaType.APPLICATION_JSON))
                                 .content(requireNonNull(objectMapper.writeValueAsString(Map.of(
                                                 "email", "user@gmail.com",

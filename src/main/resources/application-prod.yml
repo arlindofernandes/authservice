@@ -15,5 +15,13 @@ spring:
     show-sql: false
 
 jwt:
-  secret: ${JWT_SECRET}
+  private-key: ${JWT_PRIVATE_KEY}
+  public-key: ${JWT_PUBLIC_KEY}
+  issuer: ${JWT_ISSUER}
+  audience: ${JWT_AUDIENCE}
+  key-id: ${JWT_KEY_ID}
   expiration: ${JWT_EXPIRATION}
+
+admin:
+  registration:
+    token: ${ADMIN_REGISTRATION_TOKEN}

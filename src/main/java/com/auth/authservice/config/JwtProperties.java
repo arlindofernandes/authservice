@@ -1,5 +1,12 @@
 package com.auth.authservice.config;
 
+import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -14,37 +21,51 @@ import jakarta.validation.constraints.Positive;
 @ConfigurationProperties(prefix = "jwt")
 @Validated
 public class JwtProperties {
-    @NotBlank
-    private String secret;
-
-    @Positive
-    private long expiration;
+    @NotBlank private String privateKey;
+    @NotBlank private String publicKey;
+    @NotBlank private String issuer;
+    @NotBlank private String audience;
+    @NotBlank private String keyId;
+    @Positive private long expiration;
 
     @PostConstruct
-    void validateSecret() {
-        try {
-            byte[] key = Base64.getDecoder().decode(secret);
-            if (key.length < 32) {
-                throw new IllegalStateException("JWT secret must contain at least 256 bits");
-            }
-        } catch (IllegalArgumentException exception) {
-            throw new IllegalStateException("JWT secret must be Base64 encoded", exception);
+    void validateKeys() {
+        getPrivateKey();
+        PublicKey verificationKey = getPublicKey();
+        if (!(verificationKey instanceof RSAPublicKey rsaPublicKey) || rsaPublicKey.getModulus().bitLength() < 2048) {
+            throw new IllegalStateException("JWT public key must be an RSA key with at least 2048 bits");
         }
     }
 
-    public String getSecret() {
-        return secret;
+    public PrivateKey getPrivateKey() { return parsePrivateKey(privateKey); }
+    public PublicKey getPublicKey() { return parsePublicKey(publicKey); }
+
+    private PrivateKey parsePrivateKey(String encodedKey) {
+        try {
+            return KeyFactory.getInstance("RSA")
+                    .generatePrivate(new PKCS8EncodedKeySpec(Base64.getDecoder().decode(encodedKey)));
+        } catch (IllegalArgumentException | GeneralSecurityException exception) {
+            throw new IllegalStateException("JWT private key must be a Base64-encoded PKCS#8 RSA key", exception);
+        }
     }
 
-    public void setSecret(String secret) {
-        this.secret = secret;
+    private PublicKey parsePublicKey(String encodedKey) {
+        try {
+            return KeyFactory.getInstance("RSA")
+                    .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(encodedKey)));
+        } catch (IllegalArgumentException | GeneralSecurityException exception) {
+            throw new IllegalStateException("JWT public key must be a Base64-encoded X.509 RSA key", exception);
+        }
     }
 
-    public long getExpiration() {
-        return expiration;
-    }
-
-    public void setExpiration(long expiration) {
-        this.expiration = expiration;
-    }
+    public String getIssuer() { return issuer; }
+    public void setIssuer(String issuer) { this.issuer = issuer; }
+    public String getAudience() { return audience; }
+    public void setAudience(String audience) { this.audience = audience; }
+    public String getKeyId() { return keyId; }
+    public void setKeyId(String keyId) { this.keyId = keyId; }
+    public long getExpiration() { return expiration; }
+    public void setExpiration(long expiration) { this.expiration = expiration; }
+    public void setPrivateKey(String privateKey) { this.privateKey = privateKey; }
+    public void setPublicKey(String publicKey) { this.publicKey = publicKey; }
 }

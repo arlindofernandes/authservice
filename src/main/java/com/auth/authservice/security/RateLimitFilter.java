@@ -23,7 +23,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class RateLimitFilter extends OncePerRequestFilter {
     private static final Limit LOGIN_LIMIT = new Limit("login", 5, Duration.ofMinutes(1));
     private static final Limit REFRESH_LIMIT = new Limit("refresh", 10, Duration.ofMinutes(1));
-    private static final Limit REGISTRATION_LIMIT = new Limit("registration", 3, Duration.ofHours(1));
+    private static final Limit TENANT_CREATION_LIMIT = new Limit("tenant-creation", 3, Duration.ofHours(1));
     private static final Limit MEMBERSHIP_REQUEST_LIMIT = new Limit("membership-request", 3, Duration.ofHours(1));
 
     private final RateLimitService rateLimitService;
@@ -70,7 +70,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return switch (path) {
             case "/auth/login" -> LOGIN_LIMIT;
             case "/auth/refresh" -> REFRESH_LIMIT;
-            case "/auth/register" -> REGISTRATION_LIMIT;
+            case "/admin/tenants" -> TENANT_CREATION_LIMIT;
             case "/auth/membership-requests" -> MEMBERSHIP_REQUEST_LIMIT;
             default -> null;
         };

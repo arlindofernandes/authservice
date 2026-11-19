@@ -28,6 +28,7 @@ Implements JWT authentication, Role-Based Access Control (RBAC), refresh token r
 - Redis
 - Flyway (database migrations)
 - Docker & Docker Compose
+- Spring Boot Actuator
 - JUnit 5
 - Testcontainers
 
@@ -35,7 +36,7 @@ Implements JWT authentication, Role-Based Access Control (RBAC), refresh token r
 
 ## 📌 Features
 
-- ✅ User registration
+- ✅ Administrative tenant registration
 - ✅ JWT authentication
 - ✅ Refresh token rotation and reuse detection
 - ✅ Role-Based Access Control (RBAC)
@@ -140,7 +141,7 @@ The authentication process supports automatic tenant creation and tenant-based l
 
 ```mermaid
 flowchart TD
-    A["User Registration"] --> B["Provide tenantName, email and password"]
+    A["Platform administrator"] --> B["Create tenant with admin credentials"]
     B --> C["Create Tenant"]
     C --> D
     D["Assign ADMIN role"] --> E["Create User"]
@@ -160,8 +161,8 @@ flowchart TD
 
 ### Authentication Rules
 
-1. Registration creates a new tenant and its initial **ADMIN** user.
-2. Registering a tenant name that already exists is rejected.
+1. A platform administrator creates a new tenant and its initial **ADMIN** user.
+2. Tenant creation requires the `X-Admin-Token` platform secret.
 3. To join an existing tenant, a person submits a membership request with its slug.
 4. An **ADMIN** of that tenant approves the request, creating the **USER** account.
 5. The tenant is identified during login using its unique slug.
@@ -210,7 +211,7 @@ Refresh token reuse detection prevents previously rotated tokens from being reus
 - Refresh tokens stored as SHA-256 hashes.
 - Role- and permission-based authorization.
 - Access token blacklist using Redis.
-- Rate limiting by client address: login (5/min), refresh (10/min), registration and membership requests (3/hour).
+- Rate limiting by client address: login (5/min), refresh (10/min), tenant creation and membership requests (3/hour).
 - Stateless HTTP security configuration.
 - Tenant-aware authentication and isolation.
 
@@ -226,14 +227,18 @@ Refresh token reuse detection prevents previously rotated tokens from being reus
 
 ### Run with Docker
 
-Create the local environment file and generate a JWT signing secret:
+Create the local environment file and generate an RSA key pair for JWT signing:
 
 ```bash
 cp .env.example .env
-openssl rand -base64 32
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out jwt-private.pem
+openssl pkcs8 -topk8 -nocrypt -in jwt-private.pem -outform DER | base64 -w0
+openssl pkey -in jwt-private.pem -pubout -outform DER | base64 -w0
 ```
 
-Set the generated value in `JWT_SECRET` in `.env`, then start the stack:
+Set the private-key and public-key output in `JWT_PRIVATE_KEY` and
+`JWT_PUBLIC_KEY` in `.env`. Also set a production `JWT_ISSUER`,
+`JWT_AUDIENCE`, and unique `JWT_KEY_ID`, then start the stack:
 
 ```bash
 docker compose up --build -d
@@ -253,6 +258,21 @@ http://localhost:8080/swagger-ui/index.html
 ```
 
 The OpenAPI specification is exposed at `/v3/api-docs`.
+
+Tokens are signed with RS256. Other microsservices can validate them using the
+public JSON Web Key Set at `/.well-known/jwks.json`; they must validate the
+configured issuer and audience in addition to the signature.
+
+Operational probes are available without authentication:
+
+```text
+http://localhost:8080/actuator/health/liveness
+http://localhost:8080/actuator/health/readiness
+```
+
+The readiness probe checks PostgreSQL and Redis; the liveness probe only checks
+the application process, preventing unnecessary restarts during a shared
+dependency outage.
 
 Docker Compose exposes only the API port. PostgreSQL and Redis communicate with
 the application through the internal service names `db` and `redis`; access the
@@ -275,8 +295,13 @@ DB_PASSWORD=auth
 REDIS_HOST=redis
 REDIS_PORT=6379
 
-JWT_SECRET=<output of openssl rand -base64 32>
+JWT_PRIVATE_KEY=<Base64 PKCS#8 RSA private key>
+JWT_PUBLIC_KEY=<Base64 X.509 RSA public key>
+JWT_ISSUER=https://auth.example.com
+JWT_AUDIENCE=your-microservices
+JWT_KEY_ID=auth-key-2026-01
 JWT_EXPIRATION=900000
+ADMIN_REGISTRATION_TOKEN=<long random platform administrator token>
 ```
 
 `DB_URL`, `REDIS_HOST` and `REDIS_PORT` use Docker Compose internal networking.
@@ -304,14 +329,17 @@ SPRING_PROFILES_ACTIVE=prod
 
 ### 🔐 Authentication
 
-#### Register
+#### Create Tenant (Platform Administrator)
 
 ```http
-POST /auth/register
+POST /admin/tenants
+X-Admin-Token: <platform_admin_token>
 ```
 
-Creates a new tenant and its initial administrator. A request using an existing
-tenant name is rejected; use the membership-request flow to join that tenant.
+Creates a new tenant and its initial administrator. This endpoint is not public:
+the platform secret is required and must be stored in a secret manager in
+production. A request using an existing tenant name is rejected; use the
+membership-request flow to join that tenant.
 
 Example:
 
@@ -467,7 +495,7 @@ Integration tests validate:
 Latest verification:
 
 ```text
-Tests run: 35
+Tests run: 37
 Failures: 0
 Errors: 0
 Skipped: 0

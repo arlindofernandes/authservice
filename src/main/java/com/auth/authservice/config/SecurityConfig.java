@@ -18,6 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 
 import com.auth.authservice.security.JwtAuthenticationFilter;
+import com.auth.authservice.security.PlatformAdminAuthenticationFilter;
 import com.auth.authservice.security.RateLimitFilter;
 import com.auth.authservice.exception.ApiError;
 
@@ -28,12 +29,15 @@ import jakarta.servlet.http.HttpServletResponse;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final PlatformAdminAuthenticationFilter platformAdminAuthenticationFilter;
     private final RateLimitFilter rateLimitFilter;
     private final ObjectMapper objectMapper;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, RateLimitFilter rateLimitFilter,
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+            PlatformAdminAuthenticationFilter platformAdminAuthenticationFilter, RateLimitFilter rateLimitFilter,
             ObjectMapper objectMapper) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.platformAdminAuthenticationFilter = platformAdminAuthenticationFilter;
         this.rateLimitFilter = rateLimitFilter;
         this.objectMapper = objectMapper;
     }
@@ -50,9 +54,11 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/register", "/auth/login", "/auth/refresh", "/auth/membership-requests")
+                        .requestMatchers("/auth/login", "/auth/refresh", "/auth/membership-requests")
                         .permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/actuator/health/**").permitAll()
+                        .requestMatchers("/.well-known/jwks.json").permitAll()
                         .requestMatchers("/auth/logout").authenticated()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
@@ -65,6 +71,7 @@ public class SecurityConfig {
                                     "Forbidden", "Access is denied");
                         }))
                 .addFilterBefore(rateLimitFilter, SecurityContextHolderFilter.class)
+                .addFilterAfter(platformAdminAuthenticationFilter, SecurityContextHolderFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class);
 
