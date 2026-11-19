@@ -22,7 +22,7 @@ jobs:
           java-version: '21'
           cache: maven
       - name: Build and test
-        run: ./mvnw --batch-mode clean verify
+        run: mvn --batch-mode clean verify
 
   static-analysis:
     name: Static analysis
@@ -40,7 +40,7 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - run: ./mvnw --batch-mode clean compile
+      - run: mvn --batch-mode clean compile
       - uses: github/codeql-action/analyze@v4
 
   image-security:
